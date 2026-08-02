@@ -1,0 +1,23 @@
+[project]
+name = "chitiyu-pi"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.120.2",
+    "apscheduler>=3.11.3",
+    "fastapi>=0.141.1",
+    "httpx>=0.28.1",
+    "python-dotenv>=1.2.2",
+    "python-telegram-bot>=22.8",
+    "sqlite-vec>=0.1.9",
+    "uvicorn[standard]>=0.52.1",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
