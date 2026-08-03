@@ -1,5 +1,6 @@
 # backend/main.py
 import logging
+import threading
 import uvicorn
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
@@ -15,8 +16,11 @@ logging.basicConfig(level=logging.INFO)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from scheduler import build_scheduler
+    from bot.telegram import run_bot
     sched = build_scheduler()
     sched.start()
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
+    bot_thread.start()
     yield
     sched.shutdown()
 
