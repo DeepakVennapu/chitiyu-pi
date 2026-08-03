@@ -29,7 +29,6 @@ class TaskCreate(BaseModel):
 @router.post("/")
 def create(body: TaskCreate):
     conn = _conn()
-    from domains.tasks.db import insert_task
     task_id = insert_task(conn, body.user_id, body.title, body.due_at)
     conn.close()
     return {"id": task_id, "title": body.title, "due_at": body.due_at}
