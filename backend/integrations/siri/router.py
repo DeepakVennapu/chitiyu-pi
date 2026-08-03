@@ -36,8 +36,14 @@ class SiriRequest(BaseModel):
     user_id: int = 1
 
 
-def _get_conn() -> sqlite3.Connection:
-    return get_connection(DB_PATH)
+def _get_conn():
+    from db.schema import initialize_schema
+    c = get_connection(DB_PATH)
+    initialize_schema(c)
+    try:
+        yield c
+    finally:
+        c.close()
 
 
 # ---------------------------------------------------------------------------
