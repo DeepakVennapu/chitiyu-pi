@@ -112,7 +112,9 @@ def handle_message(conn: sqlite3.Connection, user_id: int,
             tool_args = parsed.get("args", {})
             domain_tools = domain.tools
             if tool_name not in domain_tools:
-                return "I'm not sure how to do that."
+                messages.append({"role": "assistant", "content": response})
+                messages.append({"role": "tool_result", "content": f"Unknown tool: {tool_name}"})
+                continue
             try:
                 tool_result = domain_tools[tool_name](conn, user_id, **tool_args)
             except Exception as e:
