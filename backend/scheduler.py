@@ -62,6 +62,8 @@ def _meal_nudge() -> None:
             _flush_event("health", "meal_nudge", "Did you eat anything? Log your last meal.")
             return
         last_meal_time = datetime.fromisoformat(meals[-1]["logged_at"].replace("Z", "+00:00"))
+        if last_meal_time.tzinfo is None:
+            last_meal_time = last_meal_time.replace(tzinfo=timezone.utc)
         if datetime.now(timezone.utc) - last_meal_time > timedelta(hours=1):
             _flush_event("health", "meal_nudge", "No meal logged in the past hour. Did you eat?")
     except Exception:
