@@ -123,6 +123,57 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             created_at   TEXT NOT NULL DEFAULT (datetime('now')),
             delivered_at TEXT
         );
+        CREATE TABLE IF NOT EXISTS accounts (
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id  INTEGER NOT NULL DEFAULT 1,
+            name     TEXT NOT NULL,
+            type     TEXT NOT NULL CHECK(type IN ('checking','savings','investment','credit')),
+            currency TEXT NOT NULL DEFAULT 'USD',
+            UNIQUE(user_id, name)
+        );
+        CREATE TABLE IF NOT EXISTS transactions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     INTEGER NOT NULL DEFAULT 1,
+            account_id  INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
+            date        TEXT NOT NULL,
+            amount      REAL NOT NULL,
+            category    TEXT NOT NULL DEFAULT 'uncategorized',
+            description TEXT NOT NULL,
+            source      TEXT NOT NULL DEFAULT 'manual' CHECK(source IN ('manual','csv')),
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_transactions_user_date
+            ON transactions(user_id, date);
+        CREATE INDEX IF NOT EXISTS idx_transactions_user_category
+            ON transactions(user_id, category);
+        CREATE TABLE IF NOT EXISTS budgets (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER NOT NULL DEFAULT 1,
+            category   TEXT NOT NULL,
+            amount     REAL NOT NULL,
+            period     TEXT NOT NULL DEFAULT 'monthly' CHECK(period IN ('monthly','weekly')),
+            start_date TEXT NOT NULL DEFAULT (date('now')),
+            UNIQUE(user_id, category, period)
+        );
+        CREATE TABLE IF NOT EXISTS net_worth (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id         INTEGER NOT NULL DEFAULT 1,
+            snapshot_date   TEXT NOT NULL,
+            assets_json     TEXT NOT NULL DEFAULT '{}',
+            liabilities_json TEXT NOT NULL DEFAULT '{}',
+            total           REAL NOT NULL,
+            UNIQUE(user_id, snapshot_date)
+        );
+        CREATE TABLE IF NOT EXISTS savings_goals (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id        INTEGER NOT NULL DEFAULT 1,
+            name           TEXT NOT NULL,
+            target_amount  REAL NOT NULL,
+            current_amount REAL NOT NULL DEFAULT 0.0,
+            target_date    TEXT,
+            created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(user_id, name)
+        );
     """)
     try:
         conn.execute("""
