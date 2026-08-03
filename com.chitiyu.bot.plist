@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.chitiyu.bot</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-c</string>
+    <string>cd /Users/me/deep-workspace/chitiyu-pi && uv run python backend/main.py</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/me/deep-workspace/chitiyu-pi</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+  </dict>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/me/deep-workspace/chitiyu-pi/logs/bot.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/me/deep-workspace/chitiyu-pi/logs/bot.err</string>
+  <key>RunAtLoad</key>
+  <true/>
+</dict>
+</plist>
