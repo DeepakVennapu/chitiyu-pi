@@ -89,10 +89,11 @@ def _evening_prompt() -> None:
         from db.connection import get_connection
         from db.schema import initialize_schema
         from domains.journal.db import get_entry
-        from datetime import datetime, timezone
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
         conn = get_connection(DB_PATH)
         initialize_schema(conn)
-        today = datetime.now(timezone.utc).date().isoformat()
+        today = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
         existing = get_entry(conn, 1, today)
         if not existing:
             conn.execute(
@@ -112,10 +113,11 @@ def _evening_followup() -> None:
         from db.connection import get_connection
         from db.schema import initialize_schema
         from domains.journal.db import get_entry
-        from datetime import datetime, timezone
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
         conn = get_connection(DB_PATH)
         initialize_schema(conn)
-        today = datetime.now(timezone.utc).date().isoformat()
+        today = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
         existing = get_entry(conn, 1, today)
         conn.close()
         if not existing:

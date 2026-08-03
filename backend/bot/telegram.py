@@ -1,5 +1,5 @@
 # backend/bot/telegram.py
-import asyncio, logging
+import logging
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 from bot.handlers import handle_text, cmd_start, handle_photo
 from config import TELEGRAM_BOT_TOKEN
