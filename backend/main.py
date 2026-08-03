@@ -10,6 +10,8 @@ from domains.knowledge.router import router as knowledge_router
 from domains.journal.router import router as journal_router
 from domains.finance.router import router as finance_router
 from integrations.ha.router import router as ha_router
+from integrations.calendar_router import router as calendar_router
+from integrations.siri.router import router as siri_router
 
 logging.basicConfig(level=logging.INFO)
 
@@ -34,6 +36,8 @@ app.include_router(knowledge_router)
 app.include_router(journal_router)
 app.include_router(finance_router)
 app.include_router(ha_router)
+app.include_router(calendar_router)
+app.include_router(siri_router)
 
 
 @app.get("/health")

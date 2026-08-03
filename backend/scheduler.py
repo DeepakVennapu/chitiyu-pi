@@ -30,6 +30,8 @@ def _morning_digest() -> None:
         from domains.tasks.db import get_overdue_tasks, get_today_tasks
         from domains.health.db import get_metrics_for_date
         from datetime import datetime, timezone, timedelta
+        from config import CALENDAR_ICS_URL
+        from integrations.calendar import fetch_today_events
         conn = get_connection(DB_PATH)
         initialize_schema(conn)
         yesterday = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
@@ -37,12 +39,16 @@ def _morning_digest() -> None:
         today_tasks = get_today_tasks(conn, 1)
         metrics = get_metrics_for_date(conn, 1, yesterday)
         conn.close()
+        calendar_events = fetch_today_events(CALENDAR_ICS_URL)
         lines = ["Good morning, Deep"]
         if metrics:
             lines.append(f"Sleep: {metrics.get('sleep_deep_mins','—')}min deep, "
                          f"{metrics.get('sleep_total_mins','—')}min total, "
                          f"HR {metrics.get('resting_hr','—')}")
         lines.append(f"Tasks: {len(overdue)} overdue, {len(today_tasks)} due today")
+        if calendar_events:
+            cal_lines = [f"- {e['title']} at {e['start_time']}" for e in calendar_events]
+            lines.append("Today's Calendar:\n" + "\n".join(cal_lines))
         _flush_event("orchestrator", "morning_digest", "\n".join(lines))
     except Exception:
         logger.exception("morning digest failed")
