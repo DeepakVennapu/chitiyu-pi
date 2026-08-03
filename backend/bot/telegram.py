@@ -18,4 +18,4 @@ def build_app():
 def run_bot():
     app = build_app()
     logger.info("Telegram bot starting...")
-    app.run_polling()
+    app.run_polling(stop_signals=None)
