@@ -1,6 +1,7 @@
 import json, re, sqlite3
+from datetime import datetime, timezone
 from orchestrator.llm import call_claude
-from domains.health.db import insert_meal, get_today_meals, upsert_health_metrics
+from domains.health.db import insert_meal, get_today_meals, get_metrics_for_date, upsert_health_metrics
 from domains.health.formatter import format_today_summary, format_meal_confirmation, TARGETS
 from config import DISPATCH_MODEL
 
@@ -24,12 +25,8 @@ def log_meal(conn: sqlite3.Connection, user_id: int, text: str, context: str = "
 
 
 def get_today_meals_tool(conn: sqlite3.Connection, user_id: int) -> str:
-    from domains.health.db import get_today_meals as _get
-    meals = _get(conn, user_id)
-    metrics = None
-    from datetime import datetime, timezone
+    meals = get_today_meals(conn, user_id)
     today = datetime.now(timezone.utc).date().isoformat()
-    from domains.health.db import get_metrics_for_date
     metrics = get_metrics_for_date(conn, user_id, today)
     return format_today_summary(meals, metrics)
 
