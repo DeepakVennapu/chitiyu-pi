@@ -1,0 +1,9 @@
+{
+  "_description": "Apple Card CSV export transform. Maps Apple Card column names to Chitiyu canonical names.",
+  "_source_columns": ["Transaction Date", "Clearing Date", "Description", "Merchant", "Category", "Type", "Amount (USD)"],
+  "Transaction Date": "date",
+  "Description": "description",
+  "Merchant": "description",
+  "Category": "category",
+  "Amount (USD)": "amount"
+}

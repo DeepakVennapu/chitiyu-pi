@@ -1,0 +1,8 @@
+{
+  "_description": "Chase Bank checking/savings CSV export transform. Maps Chase column names to Chitiyu canonical names.",
+  "_source_columns": ["Transaction Date", "Post Date", "Description", "Category", "Type", "Amount", "Memo"],
+  "Transaction Date": "date",
+  "Description": "description",
+  "Category": "category",
+  "Amount": "amount"
+}
