@@ -8,6 +8,7 @@ from domains.tasks.router import router as tasks_router
 from domains.health.router import router as health_router
 from domains.knowledge.router import router as knowledge_router
 from domains.journal.router import router as journal_router
+from domains.finance.router import router as finance_router
 from integrations.ha.router import router as ha_router
 
 logging.basicConfig(level=logging.INFO)
@@ -31,6 +32,7 @@ app.include_router(tasks_router)
 app.include_router(health_router)
 app.include_router(knowledge_router)
 app.include_router(journal_router)
+app.include_router(finance_router)
 app.include_router(ha_router)
 
 

@@ -1,6 +1,6 @@
 # backend/orchestrator/handler.py
 from __future__ import annotations
-import json, logging, re, time
+import inspect, json, logging, re, time
 import sqlite3
 
 from orchestrator.llm import call_claude
@@ -11,6 +11,7 @@ from domains.health.domain import HealthDomain
 from domains.tasks.domain import TasksDomain
 from domains.knowledge.domain import KnowledgeDomain
 from domains.journal.domain import JournalDomain
+from domains.finance.domain import FinanceDomain
 from config import DISPATCH_MODEL, POLISH_MODEL
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ _DOMAIN_MAP: dict[str, type[BaseDomain]] = {
     "tasks": TasksDomain,
     "knowledge": KnowledgeDomain,
     "journal": JournalDomain,
+    "finance": FinanceDomain,
 }
 
 
@@ -116,7 +118,11 @@ def handle_message(conn: sqlite3.Connection, user_id: int,
                 messages.append({"role": "tool_result", "content": f"Unknown tool: {tool_name}"})
                 continue
             try:
-                tool_result = domain_tools[tool_name](conn, user_id, **tool_args)
+                fn = domain_tools[tool_name]
+                sig = inspect.signature(fn)
+                valid = {k for k in sig.parameters if k not in ("conn", "user_id")}
+                filtered = {k: v for k, v in tool_args.items() if k in valid}
+                tool_result = fn(conn, user_id, **filtered)
             except Exception as e:
                 logger.warning("Tool %s failed: %s", tool_name, e)
                 tool_result = f"tool error: {e}"
