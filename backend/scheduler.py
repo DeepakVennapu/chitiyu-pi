@@ -24,34 +24,23 @@ def _flush_event(domain: str, event_type: str, text: str, user_id: int = 1) -> N
 
 
 def _morning_digest() -> None:
+    """8am: build cross-domain digest and send via Telegram."""
+    from db.connection import get_connection
+    from db.schema import initialize_schema
+    from orchestrator.digest import build_morning_digest
+    from config import DB_PATH
+
+    conn = get_connection(DB_PATH)
+    initialize_schema(conn)
     try:
-        from db.connection import get_connection
-        from db.schema import initialize_schema
-        from domains.tasks.db import get_overdue_tasks, get_today_tasks
-        from domains.health.db import get_metrics_for_date
-        from datetime import datetime, timezone, timedelta
-        from config import CALENDAR_ICS_URL
-        from integrations.calendar import fetch_today_events
-        conn = get_connection(DB_PATH)
-        initialize_schema(conn)
-        yesterday = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
-        overdue = get_overdue_tasks(conn, 1)
-        today_tasks = get_today_tasks(conn, 1)
-        metrics = get_metrics_for_date(conn, 1, yesterday)
+        user_id = 1  # Phase 1: solo user
+        text = build_morning_digest(conn, user_id)
+        _flush_event("orchestrator", "morning_digest", text, user_id)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error("morning digest failed: %s", exc)
+    finally:
         conn.close()
-        calendar_events = fetch_today_events(CALENDAR_ICS_URL)
-        lines = ["Good morning, Deep"]
-        if metrics:
-            lines.append(f"Sleep: {metrics.get('sleep_deep_mins','—')}min deep, "
-                         f"{metrics.get('sleep_total_mins','—')}min total, "
-                         f"HR {metrics.get('resting_hr','—')}")
-        lines.append(f"Tasks: {len(overdue)} overdue, {len(today_tasks)} due today")
-        if calendar_events:
-            cal_lines = [f"- {e['title']} at {e['start_time']}" for e in calendar_events]
-            lines.append("Today's Calendar:\n" + "\n".join(cal_lines))
-        _flush_event("orchestrator", "morning_digest", "\n".join(lines))
-    except Exception:
-        logger.exception("morning digest failed")
 
 
 def _meal_nudge() -> None:
