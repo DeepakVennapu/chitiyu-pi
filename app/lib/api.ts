@@ -19,7 +19,7 @@ async function request<T>(
     const text = await response.text();
     throw new Error(`${method} ${path} → ${response.status}: ${text}`);
   }
-  return response.json() as Promise<T>;
+  return response.json() as T;
 }
 
 // ─── Insights ─────────────────────────────────────────────────────────────────
@@ -191,7 +191,7 @@ export interface KnowledgeEntity {
   id: number;
   name: string;
   type: string;
-  fact_count: number; // MVP: backend GET /knowledge/entities does not return this field — render 0 or omit the count badge
+  fact_count?: number; // backend does not return this field — default to 0 when rendering
 }
 
 export interface KnowledgeFact {
