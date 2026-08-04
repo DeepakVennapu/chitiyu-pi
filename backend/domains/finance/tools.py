@@ -94,7 +94,16 @@ def add_transaction(conn: sqlite3.Connection, user_id: int,
 
     insert_transaction(conn, user_id, date, amount, category, description, source="manual")
     _fire_budget_event(conn, user_id, category, amount)
-    return format_transaction_log(description, amount, category, date)
+    result = format_transaction_log(description, amount, category, date)
+
+    # Trigger async insight regeneration — non-blocking
+    try:
+        from orchestrator.insights import trigger_insights_async
+        trigger_insights_async(user_id, scope="today")
+    except Exception:
+        pass  # Never let insight trigger block the transaction response
+
+    return result
 
 
 def add_transaction_structured(conn: sqlite3.Connection, user_id: int,

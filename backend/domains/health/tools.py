@@ -21,7 +21,16 @@ def log_meal(conn: sqlite3.Connection, user_id: int, text: str, context: str = "
     data = json.loads(m.group())
     insert_meal(conn, user_id, data["description"], data["calories"],
                 data["protein"], data.get("fat"), data.get("carbs"))
-    return format_meal_confirmation(data["description"], data["calories"], data["protein"])
+    result = format_meal_confirmation(data["description"], data["calories"], data["protein"])
+
+    # Trigger async insight regeneration — non-blocking
+    try:
+        from orchestrator.insights import trigger_insights_async
+        trigger_insights_async(user_id, scope="today")
+    except Exception:
+        pass  # Never let insight trigger block the meal log response
+
+    return result
 
 
 def get_today_meals_tool(conn: sqlite3.Connection, user_id: int) -> str:
@@ -39,4 +48,13 @@ def log_health_sync(conn: sqlite3.Connection, user_id: int, date: str,
                     steps: int | None = None, sleep_deep_mins: int | None = None,
                     sleep_total_mins: int | None = None, resting_hr: int | None = None) -> str:
     upsert_health_metrics(conn, user_id, date, steps, sleep_deep_mins, sleep_total_mins, resting_hr)
-    return f"Health metrics synced for {date}."
+    result = f"Health metrics synced for {date}."
+
+    # Trigger async insight regeneration — non-blocking
+    try:
+        from orchestrator.insights import trigger_insights_async
+        trigger_insights_async(user_id, scope="today")
+    except Exception:
+        pass  # Never let insight trigger block the health sync response
+
+    return result
