@@ -40,7 +40,6 @@ def generate_insights_endpoint(req: GenerateRequest):
     if req.scope not in ("today", "week"):
         raise HTTPException(status_code=422, detail="scope must be 'today' or 'week'")
 
-    conn = _get_conn()
     try:
         from orchestrator.insights import trigger_insights_async
         trigger_insights_async(req.user_id, req.scope)
@@ -70,6 +69,8 @@ def get_latest_insights_endpoint(
     except Exception as exc:
         logger.error("Failed to fetch insights: %s", exc)
         raise HTTPException(status_code=500, detail="Failed to fetch insights")
+    finally:
+        conn.close()
 
     if result is None:
         raise HTTPException(
