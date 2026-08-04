@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
-  FlatList,
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
@@ -147,7 +146,7 @@ export default function HealthScreen() {
                 label="Deep sleep"
                 value={metrics.sleep_deep_mins != null ? `${metrics.sleep_deep_mins}m` : "—"}
                 target={`/ ${TARGETS.deepSleepMins}m`}
-                ok={(metrics.sleep_deep_mins ?? 0) >= TARGETS.deepSleepMins}
+                ok={metrics.sleep_deep_mins != null ? metrics.sleep_deep_mins >= TARGETS.deepSleepMins : undefined}
               />
               <MetricChip
                 label="Total sleep"
