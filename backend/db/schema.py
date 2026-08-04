@@ -174,6 +174,14 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             created_at     TEXT NOT NULL DEFAULT (datetime('now')),
             UNIQUE(user_id, name)
         );
+        CREATE TABLE IF NOT EXISTS insights (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id      INTEGER NOT NULL DEFAULT 1,
+            scope        TEXT NOT NULL CHECK(scope IN ('today','week')),
+            cards_json   TEXT NOT NULL,
+            generated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(user_id, scope)
+        );
     """)
     try:
         conn.execute("""

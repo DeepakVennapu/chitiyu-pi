@@ -9,7 +9,7 @@ def test_all_tables_exist(conn):
         "entities","facts","fields","relationships","events",
         "tasks","recipes","meals","meal_recipes","health_metrics",
         "journal_entries","pending_state","notification_events",
-        "accounts","transactions","budgets","net_worth","savings_goals"
+        "accounts","transactions","budgets","net_worth","savings_goals","insights"
     }
     assert expected.issubset(tables)
 
