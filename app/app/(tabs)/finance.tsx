@@ -39,11 +39,13 @@ export default function FinanceScreen() {
   const [goals, setGoals] = useState<SavingsGoal[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
   const [expenseInput, setExpenseInput] = useState("");
   const [logging, setLogging] = useState(false);
 
   const loadData = useCallback(async () => {
+    setError(null);
     try {
       const [sumData, txData, nwData, goalsData] = await Promise.all([
         getFinanceSummary(now.getFullYear(), now.getMonth() + 1),
@@ -55,6 +57,8 @@ export default function FinanceScreen() {
       setTransactions(txData.transactions.slice(0, 10));
       setNetWorth(nwData);
       setGoals(goalsData.goals);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to load finance data");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -88,6 +92,16 @@ export default function FinanceScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}><ActivityIndicator color="#007AFF" /></View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.center}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
       </SafeAreaView>
     );
   }
@@ -258,6 +272,7 @@ const styles = StyleSheet.create({
   overTag: { color: "#FF453A", fontSize: 11, fontWeight: "700" },
   goalRow: { marginBottom: 4 },
   emptyText: { color: "#8E8E93", fontSize: 14 },
+  errorText: { color: "#FF453A", fontSize: 15, textAlign: "center", padding: 20 },
   modalOverlay: { flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" },
   modalSheet: {
     backgroundColor: "#1C1C1E",

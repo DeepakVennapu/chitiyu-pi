@@ -32,15 +32,19 @@ export default function KnowledgeScreen() {
   const [searching, setSearching] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
   const [factInput, setFactInput] = useState("");
   const [saving, setSaving] = useState(false);
 
   const loadEntities = useCallback(async () => {
+    setError(null);
     try {
       // GET /knowledge/entities returns plain KnowledgeEntity[] (no wrapper)
       const data = await getEntities();
       setEntities(data.map((e) => ({ ...e, fact_count: e.fact_count ?? 0 })));
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to load knowledge");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -121,13 +125,18 @@ export default function KnowledgeScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         >
           {loading && <ActivityIndicator color="#007AFF" style={styles.loader} />}
-          {!loading && entities.length === 0 && (
+          {!loading && error && (
+            <View style={styles.emptyState}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+          {!loading && !error && entities.length === 0 && (
             <View style={styles.emptyState}>
               <Text style={styles.emptyText}>No knowledge saved yet.</Text>
               <Text style={styles.emptySubtext}>Use "Save Fact" to start building your knowledge graph.</Text>
             </View>
           )}
-          {entities.map((entity) => (
+          {!error && entities.map((entity) => (
             <View key={entity.id} style={styles.entityRow}>
               <View style={styles.entityInfo}>
                 <Text style={styles.entityName}>{entity.name}</Text>
@@ -234,6 +243,7 @@ const styles = StyleSheet.create({
   emptyState: { paddingTop: 60, alignItems: "center", gap: 8 },
   emptyText: { color: "#fff", fontSize: 15, fontWeight: "600" },
   emptySubtext: { color: "#8E8E93", fontSize: 13, textAlign: "center" },
+  errorText: { color: "#FF453A", fontSize: 15, textAlign: "center", padding: 20 },
   entityRow: {
     flexDirection: "row",
     justifyContent: "space-between",

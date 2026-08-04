@@ -22,15 +22,17 @@ type Scope = "today" | "week";
 export default function InsightsScreen() {
   const [insights, setInsights] = useState<InsightCardData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalScope, setModalScope] = useState<Scope>("today");
+  const [activeScope, setActiveScope] = useState<Scope>("today");
   const [error, setError] = useState<string | null>(null);
 
   const loadInsights = useCallback(async () => {
+    setError(null);
     try {
-      setError(null);
-      const data = await getInsightsLatest("today");
+      const data = await getInsightsLatest(activeScope);
       setInsights(data.cards);  // backend returns `cards`, not `insights`
     } catch (e) {
       // 404 means no insights generated yet — show empty state, not an error
@@ -41,8 +43,9 @@ export default function InsightsScreen() {
       }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, []);
+  }, [activeScope]);
 
   useEffect(() => {
     loadInsights();
@@ -51,6 +54,7 @@ export default function InsightsScreen() {
   const handleGenerate = async () => {
     setGenerating(true);
     setModalVisible(false);
+    setActiveScope(modalScope);
     try {
       // POST /insights/generate returns {status, scope} — NOT cards.
       // Fire the trigger then poll latest to get the fresh cards.
@@ -77,7 +81,7 @@ export default function InsightsScreen() {
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={false} onRefresh={loadInsights} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadInsights} />}
       >
         {/* Header */}
         <View style={styles.header}>
@@ -91,6 +95,21 @@ export default function InsightsScreen() {
           >
             <Text style={styles.refreshText}>↻ Refresh</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* Scope segmented control */}
+        <View style={styles.scopeRow}>
+          {(["today", "week"] as Scope[]).map((s) => (
+            <TouchableOpacity
+              key={s}
+              style={[styles.scopeButton, activeScope === s && styles.scopeButtonActive]}
+              onPress={() => setActiveScope(s)}
+            >
+              <Text style={[styles.scopeText, activeScope === s && styles.scopeTextActive]}>
+                {s === "today" ? "Today" : "This Week"}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
         {/* States */}

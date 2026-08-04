@@ -31,11 +31,13 @@ export default function HealthScreen() {
   const [metrics, setMetrics] = useState<HealthMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [mealInput, setMealInput] = useState("");
   const [logging, setLogging] = useState(false);
   const [sheetVisible, setSheetVisible] = useState(false);
 
   const loadData = useCallback(async () => {
+    setError(null);
     try {
       const [mealsData, metricsData] = await Promise.all([
         getMealsToday(),
@@ -44,6 +46,8 @@ export default function HealthScreen() {
       setMeals(mealsData.meals);
       setTotals(mealsData.totals);
       setMetrics(metricsData);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to load health data");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -77,6 +81,16 @@ export default function HealthScreen() {
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
           <ActivityIndicator color="#007AFF" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.center}>
+          <Text style={styles.errorText}>{error}</Text>
         </View>
       </SafeAreaView>
     );
@@ -287,6 +301,7 @@ const styles = StyleSheet.create({
   mealTime: { color: "#8E8E93", fontSize: 12, marginTop: 2 },
   mealKcal: { color: "#FF9F0A", fontSize: 14, fontWeight: "600" },
   emptyText: { color: "#8E8E93", fontSize: 14 },
+  errorText: { color: "#FF453A", fontSize: 15, textAlign: "center", padding: 20 },
   // Modal
   modalOverlay: { flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" },
   modalSheet: {

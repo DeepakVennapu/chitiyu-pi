@@ -28,11 +28,13 @@ export default function TasksScreen() {
   const [today, setToday] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
   const [taskInput, setTaskInput] = useState("");
   const [adding, setAdding] = useState(false);
 
   const loadData = useCallback(async () => {
+    setError(null);
     try {
       // Both endpoints return plain Task[] arrays (no wrapper object)
       const [overdueData, todayData] = await Promise.all([
@@ -41,6 +43,8 @@ export default function TasksScreen() {
       ]);
       setOverdue(overdueData);
       setToday(todayData);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to load tasks");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -81,6 +85,16 @@ export default function TasksScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}><ActivityIndicator color="#007AFF" /></View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.center}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
       </SafeAreaView>
     );
   }
@@ -213,6 +227,7 @@ const styles = StyleSheet.create({
     borderLeftColor: "#FF453A",
   },
   emptyText: { color: "#8E8E93", fontSize: 14 },
+  errorText: { color: "#FF453A", fontSize: 15, textAlign: "center", padding: 20 },
   modalOverlay: { flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" },
   modalSheet: {
     backgroundColor: "#1C1C1E",
