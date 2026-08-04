@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Chitiyu",
+    "slug": "chitiyu",
+    "scheme": "chitiyu",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "uk.deevana.chitiyu"
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}
