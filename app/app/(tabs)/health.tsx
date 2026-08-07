@@ -13,7 +13,7 @@ import {
   type Meal, type MealTotals, type HealthMetrics, type MealPreviewResult, type Recipe,
 } from "../../lib/api";
 import { TARGETS } from "../../constants/targets";
-import { useTheme } from "../../lib/theme";
+import { useTheme, type Colors } from "../../lib/theme";
 
 type MealSection = { label: string; meals: Meal[] };
 type LogTab = "describe" | "recipes";
@@ -53,6 +53,7 @@ export default function HealthScreen() {
   // Preview/confirm flow
   const [previewing, setPreviewing] = useState(false);
   const [preview, setPreview] = useState<MealPreviewResult | null>(null);
+  const [confirmedPreview, setConfirmedPreview] = useState<MealPreviewResult | null>(null);
   const [logging, setLogging] = useState(false);
 
   // Recipe state
@@ -96,15 +97,17 @@ export default function HealthScreen() {
 
   const openSheet = () => {
     setPreview(null);
+    setConfirmedPreview(null);
     setMealInput("");
     setLogTab("describe");
     setShowSaveRecipe(false);
+    setRecipes([]);
     setSheetVisible(true);
   };
 
   const handleSwitchToRecipes = () => {
     setLogTab("recipes");
-    if (recipes.length === 0) loadRecipes();
+    loadRecipes();
   };
 
   const handlePreview = async () => {
@@ -121,6 +124,7 @@ export default function HealthScreen() {
 
   const handleConfirmLog = async () => {
     if (!preview) return;
+    setConfirmedPreview(preview);
     setLogging(true);
     try {
       await logMeal(mealInput.trim());
@@ -136,17 +140,19 @@ export default function HealthScreen() {
   };
 
   const handleSaveAsRecipe = async () => {
-    if (!preview || !recipeName.trim()) return;
+    if (!confirmedPreview || !recipeName.trim()) return;
     setSavingRecipe(true);
     try {
       await createRecipe(
-        recipeName.trim(), preview.calories, preview.protein,
-        preview.fat ?? undefined, preview.carbs ?? undefined
+        recipeName.trim(), confirmedPreview.calories, confirmedPreview.protein,
+        confirmedPreview.fat ?? undefined, confirmedPreview.carbs ?? undefined
       );
       await loadRecipes();
     } finally {
       setSavingRecipe(false);
       setShowSaveRecipe(false);
+      setConfirmedPreview(null);
+      setRecipeName("");
     }
   };
 
@@ -391,7 +397,7 @@ export default function HealthScreen() {
 }
 
 function MetricChip({ label, value, target, ok, colors }: {
-  label: string; value: string; target?: string; ok?: boolean; colors: any;
+  label: string; value: string; target?: string; ok?: boolean; colors: Colors;
 }) {
   return (
     <View style={chipStyles.chip}>

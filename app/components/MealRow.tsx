@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { View, Text, TouchableOpacity, Animated, PanResponder, StyleSheet } from "react-native";
+import { View, Text, Animated, PanResponder, StyleSheet } from "react-native";
 import type { Meal } from "../lib/api";
 import type { Colors } from "../lib/theme";
 
