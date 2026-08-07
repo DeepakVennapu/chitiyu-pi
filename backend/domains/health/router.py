@@ -5,7 +5,8 @@ from db.connection import get_connection
 from db.schema import initialize_schema
 from config import DB_PATH
 from domains.health.db import (get_today_meals, get_meals_for_date, get_metrics_for_date,
-                               upsert_health_metrics, insert_recipe, get_all_recipes, delete_meal)
+                               upsert_health_metrics, insert_recipe, get_all_recipes, delete_meal,
+                               log_meal_from_recipe)
 from domains.health.formatter import format_today_summary
 from datetime import datetime, timezone
 
@@ -44,6 +45,17 @@ class HealthSync(BaseModel):
     resting_hr: int | None = None
 
 
+class MealPreview(BaseModel):
+    user_id: int = 1
+    text: str
+    context: str = ""
+
+
+class MealFromRecipe(BaseModel):
+    user_id: int = 1
+    recipe_id: int
+
+
 @router.post("/meals")
 def log_meal_endpoint(body: MealLog):
     from domains.health.tools import log_meal
@@ -62,6 +74,32 @@ def meals_today(user_id: int = 1):
     conn.close()
     return {"meals": meals, "metrics": metrics,
             "summary": format_today_summary([dict(m) for m in (meals or [])], metrics)}
+
+
+@router.post("/meals/preview")
+def preview_meal(body: MealPreview):
+    from domains.health.tools import parse_meal_macros
+    data = parse_meal_macros(body.text, body.context)
+    if data is None:
+        raise HTTPException(422, "Couldn't parse that meal. Try: '2 eggs, toast, coffee'.")
+    return data
+
+
+@router.post("/meals/from-recipe")
+def log_from_recipe(body: MealFromRecipe):
+    conn = _conn()
+    try:
+        recipe = log_meal_from_recipe(conn, body.user_id, body.recipe_id)
+    finally:
+        conn.close()
+    if recipe is None:
+        raise HTTPException(404, "Recipe not found")
+    try:
+        from orchestrator.insights import trigger_insights_async
+        trigger_insights_async(body.user_id, scope="today")
+    except Exception:
+        pass
+    return {"result": f"Logged {recipe['name']} — {recipe['calories']} kcal"}
 
 
 @router.get("/meals/{date}")

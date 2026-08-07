@@ -78,3 +78,69 @@ def test_delete_meal_not_found(monkeypatch):
     monkeypatch.setattr(auth, "API_KEY", "testkey")
     r = client.delete("/health/meals/99999", headers={"x-api-key": "testkey"})
     assert r.status_code == 404
+
+
+_FAKE_MACRO_JSON = '{"description": "oatmeal with berries", "calories": 320, "protein": 8.0, "fat": 6.0, "carbs": 58.0}'
+
+
+def test_preview_meal(monkeypatch):
+    monkeypatch.setenv("API_KEY", "testkey")
+    import importlib, config, auth
+    importlib.reload(config)
+    monkeypatch.setattr(auth, "API_KEY", "testkey")
+    with patch("domains.health.tools.call_claude", return_value=_FAKE_MACRO_JSON):
+        r = client.post("/health/meals/preview",
+                        json={"text": "oatmeal with berries"},
+                        headers={"x-api-key": "testkey"})
+    assert r.status_code == 200
+    data = r.json()
+    assert "calories" in data
+    assert "protein" in data
+    assert isinstance(data["calories"], (int, float))
+
+
+def test_preview_meal_returns_no_db_row(monkeypatch):
+    monkeypatch.setenv("API_KEY", "testkey")
+    import importlib, config, auth
+    importlib.reload(config)
+    monkeypatch.setattr(auth, "API_KEY", "testkey")
+    before = client.get("/health/meals/today", headers={"x-api-key": "testkey"}).json()["meals"]
+    with patch("domains.health.tools.call_claude", return_value=_FAKE_MACRO_JSON):
+        client.post("/health/meals/preview",
+                    json={"text": "oatmeal"},
+                    headers={"x-api-key": "testkey"})
+    after = client.get("/health/meals/today", headers={"x-api-key": "testkey"}).json()["meals"]
+    assert len(before) == len(after)  # preview must not insert
+
+
+def test_log_from_recipe(monkeypatch):
+    monkeypatch.setenv("API_KEY", "testkey")
+    import importlib, config, auth
+    importlib.reload(config)
+    monkeypatch.setattr(auth, "API_KEY", "testkey")
+    # Create a recipe first
+    r = client.post("/health/recipes",
+                    json={"name": "Test Oats", "calories": 300, "protein": 10.0, "fat": 5.0, "carbs": 50.0},
+                    headers={"x-api-key": "testkey"})
+    assert r.status_code == 200
+    recipe_id = r.json()["id"]
+    # Log from it
+    r2 = client.post("/health/meals/from-recipe",
+                     json={"recipe_id": recipe_id},
+                     headers={"x-api-key": "testkey"})
+    assert r2.status_code == 200
+    assert "Test Oats" in r2.json()["result"]
+    # Verify it showed up in today's meals
+    meals = client.get("/health/meals/today", headers={"x-api-key": "testkey"}).json()["meals"]
+    assert any(m["description"] == "Test Oats" for m in meals)
+
+
+def test_log_from_recipe_not_found(monkeypatch):
+    monkeypatch.setenv("API_KEY", "testkey")
+    import importlib, config, auth
+    importlib.reload(config)
+    monkeypatch.setattr(auth, "API_KEY", "testkey")
+    r = client.post("/health/meals/from-recipe",
+                    json={"recipe_id": 99999},
+                    headers={"x-api-key": "testkey"})
+    assert r.status_code == 404
