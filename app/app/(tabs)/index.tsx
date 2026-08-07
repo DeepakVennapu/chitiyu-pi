@@ -67,7 +67,9 @@ export default function InsightsScreen() {
   };
 
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-  const visibleInsights = insights.filter((_, i) => !dismissed.has(i));
+  const visibleInsights = insights
+    .map((insight, originalIndex) => ({ insight, originalIndex }))
+    .filter(({ originalIndex }) => !dismissed.has(originalIndex));
 
   const s = makeStyles(colors);
 
@@ -131,8 +133,8 @@ export default function InsightsScreen() {
             <Text style={s.emptySubtext}>Pull down to refresh or generate new insights.</Text>
           </View>
         )}
-        {!loading && !generating && visibleInsights.map((insight, i) => (
-          <InsightCard key={i} insight={insight} index={i} onDismiss={handleDismiss} />
+        {!loading && !generating && visibleInsights.map(({ insight, originalIndex }) => (
+          <InsightCard key={originalIndex} insight={insight} index={originalIndex} onDismiss={handleDismiss} />
         ))}
       </ScrollView>
 
