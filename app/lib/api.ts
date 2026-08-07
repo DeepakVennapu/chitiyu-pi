@@ -98,6 +98,41 @@ export const logMeal = (text: string) =>
 export const getHealthMetricsToday = () =>
   request<HealthMetrics>("GET", "/health/metrics/today");
 
+// ─── Health — additional ──────────────────────────────────────────────────────
+
+export interface MealPreviewResult {
+  description: string;
+  calories: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+}
+
+export interface Recipe {
+  id: number;
+  name: string;
+  calories: number;
+  protein: number;
+  fat: number | null;
+  carbs: number | null;
+  serving_unit: string | null;
+}
+
+export const deleteMeal = (id: number) =>
+  request<{ ok: boolean }>("DELETE", `/health/meals/${id}`);
+
+export const getMealPreview = (text: string) =>
+  request<MealPreviewResult>("POST", "/health/meals/preview", { text });
+
+export const logMealFromRecipe = (recipeId: number) =>
+  request<{ result: string }>("POST", "/health/meals/from-recipe", { recipe_id: recipeId });
+
+export const getRecipes = () =>
+  request<Recipe[]>("GET", "/health/recipes");
+
+export const createRecipe = (name: string, calories: number, protein: number, fat?: number, carbs?: number) =>
+  request<{ id: number; name: string }>("POST", "/health/recipes", { name, calories, protein, fat, carbs });
+
 // ─── Finance ──────────────────────────────────────────────────────────────────
 
 export interface Transaction {
@@ -145,8 +180,8 @@ export const getFinanceSummary = (year: number, month: number) =>
 export const getTransactions = () =>
   request<{ transactions: Transaction[] }>("GET", "/finance/transactions");
 
-export const logExpense = (text: string) =>
-  request<Transaction>("POST", "/finance/transactions", { text });
+export const logExpense = (text: string, category?: string) =>
+  request<Transaction>("POST", "/finance/transactions", { text, ...(category ? { category } : {}) });
 
 export const getNetWorth = () =>
   request<NetWorth | null>("GET", "/finance/networth").catch((e) => {
@@ -157,6 +192,22 @@ export const getNetWorth = () =>
 
 export const getSavingsGoals = () =>
   request<{ goals: SavingsGoal[] }>("GET", "/finance/goals");
+
+export const deleteTransaction = (id: number) =>
+  request<{ ok: boolean }>("DELETE", `/finance/transactions/${id}`);
+
+export interface Budget {
+  id: number;
+  category: string;
+  amount: number;
+  period: string;
+}
+
+export const getBudgets = () =>
+  request<Budget[]>("GET", "/finance/budgets");
+
+export const setBudget = (category: string, amount: number) =>
+  request<{ id: number; category: string; amount: number }>("POST", "/finance/budgets", { category, amount });
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
 
