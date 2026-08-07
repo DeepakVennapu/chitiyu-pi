@@ -5,7 +5,7 @@ from db.connection import get_connection
 from db.schema import initialize_schema
 from config import DB_PATH
 from domains.health.db import (get_today_meals, get_meals_for_date, get_metrics_for_date,
-                               upsert_health_metrics, insert_recipe, get_all_recipes)
+                               upsert_health_metrics, insert_recipe, get_all_recipes, delete_meal)
 from domains.health.formatter import format_today_summary
 from datetime import datetime, timezone
 
@@ -113,6 +113,16 @@ def create_recipe(body: RecipeCreate):
                               body.protein, body.fat, body.carbs, body.serving_unit)
     conn.close()
     return {"id": recipe_id, "name": body.name}
+
+
+@router.delete("/meals/{meal_id}")
+def delete_meal_endpoint(meal_id: int, user_id: int = 1):
+    conn = _conn()
+    ok = delete_meal(conn, user_id, meal_id)
+    conn.close()
+    if not ok:
+        raise HTTPException(404, "Meal not found")
+    return {"ok": True}
 
 
 @router.get("/summary/{date}")

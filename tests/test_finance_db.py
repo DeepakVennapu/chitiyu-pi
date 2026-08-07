@@ -1,7 +1,7 @@
 import pytest
 from domains.finance.db import (
     insert_account, get_account_by_name, list_accounts,
-    insert_transaction, list_transactions, get_monthly_spend,
+    insert_transaction, list_transactions, delete_transaction, get_monthly_spend,
     get_category_spend_this_month,
     upsert_budget, list_budgets, get_budget,
     insert_net_worth, get_latest_net_worth, list_net_worth_snapshots,
@@ -86,6 +86,18 @@ def test_transaction_user_isolation(conn):
     insert_transaction(conn, 1, "2026-08-01", -45.00, "groceries", "Whole Foods", "manual")
     txns = list_transactions(conn, 2)
     assert txns == []
+
+
+def test_delete_transaction(conn, user_id):
+    tid = insert_transaction(conn, user_id, "2026-08-07", -50.0, "food", "lunch", "manual")
+    assert delete_transaction(conn, user_id, tid) is True
+    rows = list_transactions(conn, user_id)
+    assert all(r["id"] != tid for r in rows)
+
+
+def test_delete_transaction_wrong_user(conn):
+    tid = insert_transaction(conn, 1, "2026-08-07", -50.0, "food", "lunch", "manual")
+    assert delete_transaction(conn, 2, tid) is False  # wrong user_id
 
 
 # ── Budgets ────────────────────────────────────────────────────────────────────

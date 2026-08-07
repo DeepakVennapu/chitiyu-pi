@@ -67,6 +67,14 @@ def list_transactions(conn: sqlite3.Connection, user_id: int,
     return [dict(r) for r in conn.execute(query, params).fetchall()]
 
 
+def delete_transaction(conn: sqlite3.Connection, user_id: int, tx_id: int) -> bool:
+    cur = conn.execute(
+        "DELETE FROM transactions WHERE id=? AND user_id=?", (tx_id, user_id)
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
 def get_monthly_spend(conn: sqlite3.Connection, user_id: int,
                       year: int, month: int) -> dict[str, float]:
     """Returns {category: total_spent} for the given month (negative amounts only = expenses)."""

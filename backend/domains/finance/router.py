@@ -11,6 +11,7 @@ from config import DB_PATH
 from db.connection import get_connection
 from db.schema import initialize_schema
 from domains.finance.db import (
+    delete_transaction,
     get_latest_net_worth,
     insert_net_worth,
     insert_savings_goal,
@@ -120,6 +121,16 @@ def get_transactions(user_id: int = 1, date_from: str | None = None,
         return {"transactions": txns}
     finally:
         conn.close()
+
+
+@router.delete("/transactions/{tx_id}")
+def delete_transaction_endpoint(tx_id: int, user_id: int = 1):
+    conn = _conn()
+    ok = delete_transaction(conn, user_id, tx_id)
+    conn.close()
+    if not ok:
+        raise HTTPException(404, "Transaction not found")
+    return {"ok": True}
 
 
 # ── CSV import ─────────────────────────────────────────────────────────────────

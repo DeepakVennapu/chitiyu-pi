@@ -45,3 +45,36 @@ def test_tasks_with_api_key(monkeypatch):
     monkeypatch.setattr(auth, "API_KEY", "testkey")
     r = client.get("/tasks/", headers={"x-api-key": "testkey"})
     assert r.status_code == 200
+
+
+def test_delete_meal(monkeypatch):
+    monkeypatch.setenv("API_KEY", "testkey")
+    import importlib, config, auth
+    importlib.reload(config)
+    monkeypatch.setattr(auth, "API_KEY", "testkey")
+    # First log a meal to get an id
+    r = client.post("/health/meals", json={"text": "1 banana"}, headers={"x-api-key": "testkey"})
+    assert r.status_code == 200
+    # Get today's meals to find the id
+    r2 = client.get("/health/meals/today", headers={"x-api-key": "testkey"})
+    assert r2.status_code == 200
+    meals = r2.json()["meals"]
+    assert len(meals) > 0
+    meal_id = meals[-1]["id"]
+    # Delete it
+    r3 = client.delete(f"/health/meals/{meal_id}", headers={"x-api-key": "testkey"})
+    assert r3.status_code == 200
+    assert r3.json()["ok"] is True
+    # Verify gone
+    r4 = client.get("/health/meals/today", headers={"x-api-key": "testkey"})
+    ids = [m["id"] for m in r4.json()["meals"]]
+    assert meal_id not in ids
+
+
+def test_delete_meal_not_found(monkeypatch):
+    monkeypatch.setenv("API_KEY", "testkey")
+    import importlib, config, auth
+    importlib.reload(config)
+    monkeypatch.setattr(auth, "API_KEY", "testkey")
+    r = client.delete("/health/meals/99999", headers={"x-api-key": "testkey"})
+    assert r.status_code == 404

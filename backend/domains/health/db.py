@@ -65,3 +65,11 @@ def get_all_recipes(conn: sqlite3.Connection, user_id: int) -> list:
     return conn.execute(
         "SELECT * FROM recipes WHERE user_id=? ORDER BY name", (user_id,)
     ).fetchall()
+
+
+def delete_meal(conn: sqlite3.Connection, user_id: int, meal_id: int) -> bool:
+    cur = conn.execute(
+        "DELETE FROM meals WHERE id=? AND user_id=?", (meal_id, user_id)
+    )
+    conn.commit()
+    return cur.rowcount > 0
