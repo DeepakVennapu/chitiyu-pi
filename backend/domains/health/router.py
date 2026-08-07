@@ -56,6 +56,15 @@ class MealFromRecipe(BaseModel):
     recipe_id: int
 
 
+class MealLogParsed(BaseModel):
+    user_id: int = 1
+    description: str
+    calories: int
+    protein: float
+    fat: float | None = None
+    carbs: float | None = None
+
+
 @router.post("/meals")
 def log_meal_endpoint(body: MealLog):
     from domains.health.tools import log_meal
@@ -100,6 +109,22 @@ def log_from_recipe(body: MealFromRecipe):
     except Exception:
         pass
     return {"result": f"Logged {recipe['name']} — {recipe['calories']} kcal"}
+
+
+@router.post("/meals/log-parsed")
+def log_meal_parsed(body: MealLogParsed):
+    from domains.health.db import insert_meal
+    from domains.health.formatter import format_meal_confirmation
+    conn = _conn()
+    insert_meal(conn, body.user_id, body.description, body.calories,
+                body.protein, body.fat, body.carbs)
+    conn.close()
+    try:
+        from orchestrator.insights import trigger_insights_async
+        trigger_insights_async(body.user_id, scope="today")
+    except Exception:
+        pass
+    return {"result": format_meal_confirmation(body.description, body.calories, body.protein)}
 
 
 @router.get("/meals/{date}")

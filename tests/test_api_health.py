@@ -52,8 +52,10 @@ def test_delete_meal(monkeypatch):
     import importlib, config, auth
     importlib.reload(config)
     monkeypatch.setattr(auth, "API_KEY", "testkey")
-    # First log a meal to get an id
-    r = client.post("/health/meals", json={"text": "1 banana"}, headers={"x-api-key": "testkey"})
+    # First log a meal to get an id — mock LLM to avoid a real Claude call
+    fake_response = '{"description": "banana", "calories": 89, "protein": 1.1, "fat": 0.3, "carbs": 23.0}'
+    with patch("domains.health.tools.call_claude", return_value=fake_response):
+        r = client.post("/health/meals", json={"text": "1 banana"}, headers={"x-api-key": "testkey"})
     assert r.status_code == 200
     # Get today's meals to find the id
     r2 = client.get("/health/meals/today", headers={"x-api-key": "testkey"})

@@ -9,3 +9,6 @@ wheels/
 # Virtual environments
 .venv
 .worktrees/
+
+# SQLite database files
+chitiyu.db*

@@ -9,7 +9,7 @@ import { MacroRings } from "../../components/MacroRings";
 import { MealRow } from "../../components/MealRow";
 import {
   getMealsToday, logMeal, getHealthMetricsToday, getMealPreview,
-  logMealFromRecipe, getRecipes, createRecipe, deleteMeal,
+  logMealFromRecipe, logMealParsed, getRecipes, createRecipe, deleteMeal,
   type Meal, type MealTotals, type HealthMetrics, type MealPreviewResult, type Recipe,
 } from "../../lib/api";
 import { TARGETS } from "../../constants/targets";
@@ -127,7 +127,7 @@ export default function HealthScreen() {
     setConfirmedPreview(preview);
     setLogging(true);
     try {
-      await logMeal(mealInput.trim());
+      await logMealParsed(preview);
       setSheetVisible(false);
       setPreview(null);
       setMealInput("");

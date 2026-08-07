@@ -127,6 +127,15 @@ export const getMealPreview = (text: string) =>
 export const logMealFromRecipe = (recipeId: number) =>
   request<{ result: string }>("POST", "/health/meals/from-recipe", { recipe_id: recipeId });
 
+export const logMealParsed = (data: MealPreviewResult) =>
+  request<LogMealResponse>("POST", "/health/meals/log-parsed", {
+    description: data.description,
+    calories: data.calories,
+    protein: data.protein,
+    fat: data.fat ?? null,
+    carbs: data.carbs ?? null,
+  });
+
 export const getRecipes = () =>
   request<Recipe[]>("GET", "/health/recipes");
 

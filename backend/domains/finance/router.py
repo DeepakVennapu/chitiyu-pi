@@ -90,6 +90,12 @@ def log_transaction(body: TransactionCreate):
             if tx is None:
                 raise HTTPException(422, "Couldn't parse that expense. "
                                          "Try: 'spent $45 at Whole Foods on groceries'.")
+            # Override LLM-derived category if the user explicitly provided one
+            if body.category is not None:
+                conn.execute("UPDATE transactions SET category=? WHERE id=?",
+                             (body.category, tx["id"]))
+                conn.commit()
+                tx["category"] = body.category
             return tx
         # Structured path — all fields provided directly
         if body.date is None or body.amount is None or body.description is None:
