@@ -1,18 +1,17 @@
 import React, { useRef } from "react";
-import { View, Text, TouchableOpacity, Animated, PanResponder, StyleSheet } from "react-native";
-import type { Task } from "../lib/api";
-import { useTheme } from "../lib/theme";
+import { View, Text, Animated, PanResponder, StyleSheet } from "react-native";
+import type { Meal } from "../lib/api";
+import type { Colors } from "../lib/theme";
 
 interface Props {
-  task: Task;
-  onComplete: (id: number) => void;
+  meal: Meal;
   onDelete: (id: number) => void;
+  colors: Colors;
 }
 
 const SWIPE_THRESHOLD = -80;
 
-export function TaskRow({ task, onComplete, onDelete }: Props) {
-  const { colors } = useTheme();
+export function MealRow({ meal, onDelete, colors }: Props) {
   const translateX = useRef(new Animated.Value(0)).current;
   const deleteOpacity = translateX.interpolate({
     inputRange: [SWIPE_THRESHOLD, 0],
@@ -26,13 +25,16 @@ export function TaskRow({ task, onComplete, onDelete }: Props) {
     onPanResponderRelease: (_, { dx }) => {
       if (dx < SWIPE_THRESHOLD) {
         Animated.timing(translateX, { toValue: -120, duration: 150, useNativeDriver: true }).start(
-          () => onDelete(task.id)
+          () => onDelete(meal.id)
         );
       } else {
         Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
       }
     },
   });
+
+  const formatTime = (iso: string) =>
+    new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
   return (
     <View style={styles.container}>
@@ -43,17 +45,11 @@ export function TaskRow({ task, onComplete, onDelete }: Props) {
         style={[styles.row, { transform: [{ translateX }], backgroundColor: colors.background, borderBottomColor: colors.border }]}
         {...panResponder.panHandlers}
       >
-        <TouchableOpacity style={styles.checkbox} onPress={() => onComplete(task.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <View style={[styles.checkCircle, { borderColor: colors.checkCircle }]} />
-        </TouchableOpacity>
         <View style={styles.info}>
-          <Text style={[styles.title, { color: colors.text }]}>{task.title}</Text>
-          {task.due_at && (
-            <Text style={[styles.due, { color: colors.textSecondary }]}>
-              Due {new Date(task.due_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-            </Text>
-          )}
+          <Text style={[styles.desc, { color: colors.text }]}>{meal.description}</Text>
+          <Text style={[styles.time, { color: colors.textSecondary }]}>{formatTime(meal.logged_at)}</Text>
         </View>
+        <Text style={[styles.kcal, { color: colors.accentOrange }]}>{meal.calories} kcal</Text>
       </Animated.View>
     </View>
   );
@@ -61,12 +57,18 @@ export function TaskRow({ task, onComplete, onDelete }: Props) {
 
 const styles = StyleSheet.create({
   container: { position: "relative", overflow: "hidden" },
-  deleteBackground: { position: "absolute", right: 0, top: 0, bottom: 0, width: 120, alignItems: "center", justifyContent: "center" },
+  deleteBackground: {
+    position: "absolute", right: 0, top: 0, bottom: 0, width: 120,
+    alignItems: "center", justifyContent: "center",
+  },
   deleteLabel: { color: "#fff", fontWeight: "600", fontSize: 14 },
-  row: { flexDirection: "row", alignItems: "center", paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: StyleSheet.hairlineWidth },
-  checkbox: { marginRight: 12 },
-  checkCircle: { width: 22, height: 22, borderRadius: 11, borderWidth: 2 },
-  info: { flex: 1 },
-  title: { fontSize: 15 },
-  due: { fontSize: 12, marginTop: 2 },
+  row: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    paddingVertical: 10, paddingHorizontal: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  info: { flex: 1, marginRight: 12 },
+  desc: { fontSize: 14 },
+  time: { fontSize: 12, marginTop: 2 },
+  kcal: { fontSize: 14, fontWeight: "600" },
 });

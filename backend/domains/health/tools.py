@@ -12,13 +12,20 @@ Context (if any): {context}
 Meal: {text}"""
 
 
-def log_meal(conn: sqlite3.Connection, user_id: int, text: str, context: str = "") -> str:
+def parse_meal_macros(text: str, context: str = "") -> dict | None:
+    """Call Claude to parse meal text into macros. Returns dict or None on failure."""
     raw = call_claude(_PARSE_PROMPT.format(text=text, context=context),
                       model=DISPATCH_MODEL, timeout=20)
     m = re.search(r'\{.*\}', raw, re.DOTALL)
     if not m:
+        return None
+    return json.loads(m.group())
+
+
+def log_meal(conn: sqlite3.Connection, user_id: int, text: str, context: str = "") -> str:
+    data = parse_meal_macros(text, context)
+    if data is None:
         return "Couldn't parse that meal. Try: '2 eggs, toast, coffee'."
-    data = json.loads(m.group())
     insert_meal(conn, user_id, data["description"], data["calories"],
                 data["protein"], data.get("fat"), data.get("carbs"))
     result = format_meal_confirmation(data["description"], data["calories"], data["protein"])

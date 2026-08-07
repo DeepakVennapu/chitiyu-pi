@@ -65,3 +65,30 @@ def get_all_recipes(conn: sqlite3.Connection, user_id: int) -> list:
     return conn.execute(
         "SELECT * FROM recipes WHERE user_id=? ORDER BY name", (user_id,)
     ).fetchall()
+
+
+def delete_meal(conn: sqlite3.Connection, user_id: int, meal_id: int) -> bool:
+    cur = conn.execute(
+        "DELETE FROM meals WHERE id=? AND user_id=?", (meal_id, user_id)
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def log_meal_from_recipe(conn: sqlite3.Connection, user_id: int, recipe_id: int) -> dict | None:
+    """Fetch recipe and insert a meal row. Returns the meal dict or None if recipe not found."""
+    row = conn.execute(
+        "SELECT * FROM recipes WHERE id=? AND user_id=?", (recipe_id, user_id)
+    ).fetchone()
+    if not row:
+        return None
+    recipe = dict(row)
+    from datetime import datetime, timezone
+    conn.execute(
+        "INSERT INTO meals(user_id, description, calories, protein, fat, carbs, source, recipe_id) "
+        "VALUES (?,?,?,?,?,?,?,?)",
+        (user_id, recipe["name"], recipe["calories"], recipe["protein"],
+         recipe.get("fat"), recipe.get("carbs"), "recipe", recipe_id)
+    )
+    conn.commit()
+    return recipe

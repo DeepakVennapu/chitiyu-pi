@@ -11,6 +11,7 @@ from config import DB_PATH
 from db.connection import get_connection
 from db.schema import initialize_schema
 from domains.finance.db import (
+    delete_transaction,
     get_latest_net_worth,
     insert_net_worth,
     insert_savings_goal,
@@ -89,6 +90,12 @@ def log_transaction(body: TransactionCreate):
             if tx is None:
                 raise HTTPException(422, "Couldn't parse that expense. "
                                          "Try: 'spent $45 at Whole Foods on groceries'.")
+            # Override LLM-derived category if the user explicitly provided one
+            if body.category is not None:
+                conn.execute("UPDATE transactions SET category=? WHERE id=?",
+                             (body.category, tx["id"]))
+                conn.commit()
+                tx["category"] = body.category
             return tx
         # Structured path — all fields provided directly
         if body.date is None or body.amount is None or body.description is None:
@@ -120,6 +127,16 @@ def get_transactions(user_id: int = 1, date_from: str | None = None,
         return {"transactions": txns}
     finally:
         conn.close()
+
+
+@router.delete("/transactions/{tx_id}")
+def delete_transaction_endpoint(tx_id: int, user_id: int = 1):
+    conn = _conn()
+    ok = delete_transaction(conn, user_id, tx_id)
+    conn.close()
+    if not ok:
+        raise HTTPException(404, "Transaction not found")
+    return {"ok": True}
 
 
 # ── CSV import ─────────────────────────────────────────────────────────────────
