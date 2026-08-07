@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -55,7 +55,9 @@ export default function KnowledgeScreen() {
 
   const handleRefresh = () => { setRefreshing(true); loadEntities(); };
 
-  const handleSearch = useCallback(async (q: string) => {
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearch = useCallback((q: string) => {
     setSearchQuery(q);
     if (!q.trim()) {
       setMode("entities");
@@ -63,14 +65,16 @@ export default function KnowledgeScreen() {
       return;
     }
     setMode("search");
-    setSearching(true);
-    try {
-      // GET /knowledge/search returns plain KnowledgeFact[] (no wrapper)
-      const results = await searchKnowledge(q);
-      setSearchResults(results);
-    } finally {
-      setSearching(false);
-    }
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const results = await searchKnowledge(q);
+        setSearchResults(results);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
   }, []);
 
   const handleSaveFact = async () => {

@@ -7,19 +7,21 @@ interface Props {
   target: number;
   unit: string;
   color?: string;
+  formatter?: (n: number) => string;
 }
 
-export function ProgressBar({ label, value, target, unit, color = "#007AFF" }: Props) {
-  const pct = Math.min(value / target, 1);
+export function ProgressBar({ label, value, target, unit, color = "#007AFF", formatter }: Props) {
+  const pct = target > 0 ? Math.min(value / target, 1) : 0;
   const over = value > target;
+  const fmt = formatter ?? ((n: number) => `${Math.round(n)}${unit}`);
 
   return (
     <View style={styles.container}>
       <View style={styles.labelRow}>
         <Text style={styles.label}>{label}</Text>
         <Text style={[styles.value, over && styles.over]}>
-          {Math.round(value)}{unit}
-          <Text style={styles.target}> / {target}{unit}</Text>
+          {fmt(value)}
+          <Text style={styles.target}> / {fmt(target)}</Text>
         </Text>
       </View>
       <View style={styles.track}>

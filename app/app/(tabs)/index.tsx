@@ -57,12 +57,19 @@ export default function InsightsScreen() {
     setActiveScope(modalScope);
     try {
       // POST /insights/generate returns {status, scope} — NOT cards.
-      // Fire the trigger then poll latest to get the fresh cards.
+      // Fire the trigger then poll until cards appear (LLM generation can take 5-15s).
       await generateInsights(modalScope);
-      // Brief delay to allow background generation to complete
-      await new Promise((r) => setTimeout(r, 3000));
-      const data = await getInsightsLatest(modalScope);
-      setInsights(data.cards);
+      let data = null;
+      for (let attempt = 0; attempt < 10; attempt++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        try {
+          data = await getInsightsLatest(modalScope);
+          if (data.cards.length > 0) break;
+        } catch {
+          // 404 means not ready yet — keep polling
+        }
+      }
+      if (data) setInsights(data.cards);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to generate insights");
     } finally {

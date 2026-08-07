@@ -151,8 +151,8 @@ export default function HealthScreen() {
           </View>
         )}
 
-        {/* Sleep summary */}
-        {metrics && (
+        {/* Sleep summary — only show if at least one metric has data */}
+        {metrics && (metrics.sleep_total_mins != null || metrics.sleep_deep_mins != null || metrics.resting_hr != null) && (
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Last Night</Text>
             <View style={styles.metricsRow}>

@@ -31,7 +31,8 @@ def create(body: TaskCreate):
     conn = _conn()
     task_id = insert_task(conn, body.user_id, body.title, body.due_at)
     conn.close()
-    return {"id": task_id, "title": body.title, "due_at": body.due_at}
+    return {"id": task_id, "title": body.title, "due_at": body.due_at,
+            "completed_at": None, "priority": None, "tags": []}
 
 
 @router.get("/")

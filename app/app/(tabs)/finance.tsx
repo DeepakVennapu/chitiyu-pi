@@ -124,6 +124,7 @@ export default function FinanceScreen() {
                 target={summary.total_budget}
                 unit=""
                 color="#30D158"
+                formatter={formatCurrency}
               />
             ) : (
               <Text style={styles.bigNumber}>{formatCurrency(summary.total_spent)}</Text>
@@ -182,6 +183,7 @@ export default function FinanceScreen() {
                   target={goal.target_amount}
                   unit=""
                   color="#30D158"
+                  formatter={formatCurrency}
                 />
               </View>
             ))}

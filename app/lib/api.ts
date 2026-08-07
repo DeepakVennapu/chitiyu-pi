@@ -180,10 +180,10 @@ export const addTask = (title: string) =>
   request<Task>("POST", "/tasks/", { title });
 
 export const completeTask = (id: number) =>
-  request<Task>("PATCH", `/tasks/${id}/complete`, {});
+  request<{ ok: boolean }>("PATCH", `/tasks/${id}/complete`, {});
 
 export const deleteTask = (id: number) =>
-  request<void>("DELETE", `/tasks/${id}`);
+  request<{ ok: boolean }>("DELETE", `/tasks/${id}`);
 
 // ─── Knowledge ────────────────────────────────────────────────────────────────
 
