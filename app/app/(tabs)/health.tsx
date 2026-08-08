@@ -8,7 +8,7 @@ import { ProgressBar } from "../../components/ProgressBar";
 import { MacroRings } from "../../components/MacroRings";
 import { MealRow } from "../../components/MealRow";
 import {
-  getMealsToday, logMeal, getHealthMetricsToday, getMealPreview,
+  getMealsToday, logMeal, getMealPreview,
   logMealFromRecipe, logMealParsed, getRecipes, createRecipe, deleteMeal,
   type Meal, type MealTotals, type HealthMetrics, type MealPreviewResult, type Recipe,
 } from "../../lib/api";
@@ -17,19 +17,43 @@ import { useTheme, type Colors } from "../../lib/theme";
 
 type MealSection = { label: string; meals: Meal[] };
 type LogTab = "describe" | "recipes";
+type MealTime = "breakfast" | "lunch" | "dinner";
+
+function defaultMealTime(): MealTime {
+  const h = new Date().getHours();
+  if (h < 12) return "breakfast";
+  if (h < 18) return "lunch";
+  return "dinner";
+}
+
+// SQLite stores logged_at as "YYYY-MM-DD HH:MM:SS" with no timezone marker (UTC).
+// JS parses bare datetime strings as LOCAL time, so we must append Z to force UTC.
+function parseLoggedAt(raw: string | null | undefined): Date | null {
+  if (!raw) return null;
+  const s = raw.includes("Z") || raw.includes("+") ? raw : raw.replace(" ", "T") + "Z";
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// Slot selection only affects which bucket the meal appears under when backdating.
+// For "log now" we send null — backend uses datetime('now') (UTC).
+function mealTimeToISO(_slot: MealTime): string {
+  return new Date().toISOString();
+}
 
 function bucketMeals(meals: Meal[]): MealSection[] {
   const sections: { label: string; hours: [number, number] }[] = [
-    { label: "Breakfast", hours: [0, 11] },
-    { label: "Lunch", hours: [11, 15] },
-    { label: "Dinner", hours: [15, 20] },
-    { label: "Late Night", hours: [20, 24] },
+    { label: "Breakfast", hours: [0, 12] },
+    { label: "Lunch", hours: [12, 18] },
+    { label: "Dinner", hours: [18, 24] },
   ];
   return sections
     .map(({ label, hours: [start, end] }) => ({
       label,
       meals: meals.filter((m) => {
-        const hour = new Date(m.logged_at).getHours();
+        const d = parseLoggedAt(m.logged_at);
+        if (!d) return false;
+        const hour = d.getHours();
         return hour >= start && hour < end;
       }),
     }))
@@ -55,6 +79,7 @@ export default function HealthScreen() {
   const [preview, setPreview] = useState<MealPreviewResult | null>(null);
   const [confirmedPreview, setConfirmedPreview] = useState<MealPreviewResult | null>(null);
   const [logging, setLogging] = useState(false);
+  const [mealTime, setMealTime] = useState<"breakfast" | "lunch" | "dinner">(defaultMealTime());
 
   // Recipe state
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -66,13 +91,20 @@ export default function HealthScreen() {
   const loadData = useCallback(async () => {
     setError(null);
     try {
-      const [mealsData, metricsData] = await Promise.all([
-        getMealsToday(),
-        getHealthMetricsToday(),
-      ]);
+      const mealsData = await getMealsToday();
       setMeals(mealsData.meals);
-      setTotals(mealsData.totals);
-      setMetrics(metricsData);
+      setMetrics(mealsData.metrics);
+      // Backend does not return totals — sum client-side
+      const computed: MealTotals = mealsData.meals.reduce(
+        (acc, m) => ({
+          calories: acc.calories + (m.calories ?? 0),
+          protein: acc.protein + (m.protein ?? 0),
+          fat: acc.fat + (m.fat ?? 0),
+          carbs: acc.carbs + (m.carbs ?? 0),
+        }),
+        { calories: 0, protein: 0, fat: 0, carbs: 0 }
+      );
+      setTotals(computed);
     } catch (e: any) {
       setError(e?.message ?? "Failed to load health data");
     } finally {
@@ -102,6 +134,7 @@ export default function HealthScreen() {
     setLogTab("describe");
     setShowSaveRecipe(false);
     setRecipes([]);
+    setMealTime(defaultMealTime());
     setSheetVisible(true);
   };
 
@@ -127,7 +160,7 @@ export default function HealthScreen() {
     setConfirmedPreview(preview);
     setLogging(true);
     try {
-      await logMealParsed(preview);
+      await logMealParsed(preview, mealTimeToISO(mealTime));
       setSheetVisible(false);
       setPreview(null);
       setMealInput("");
@@ -169,10 +202,18 @@ export default function HealthScreen() {
 
   const handleDeleteMeal = async (id: number) => {
     await deleteMeal(id);
-    setMeals((prev) => prev.filter((m) => m.id !== id));
-    // Reload totals
-    const mealsData = await getMealsToday();
-    setTotals(mealsData.totals);
+    const remaining = meals.filter((m) => m.id !== id);
+    setMeals(remaining);
+    const computed: MealTotals = remaining.reduce(
+      (acc, m) => ({
+        calories: acc.calories + (m.calories ?? 0),
+        protein: acc.protein + (m.protein ?? 0),
+        fat: acc.fat + (m.fat ?? 0),
+        carbs: acc.carbs + (m.carbs ?? 0),
+      }),
+      { calories: 0, protein: 0, fat: 0, carbs: 0 }
+    );
+    setTotals(computed);
   };
 
   const mealSections = bucketMeals(meals);
@@ -285,7 +326,20 @@ export default function HealthScreen() {
                       {preview.fat != null && <MacroChip label="Fat" value={`${preview.fat}g`} color={colors.accentOrange} />}
                       {preview.carbs != null && <MacroChip label="Carbs" value={`${preview.carbs}g`} color={colors.accentPurple} />}
                     </View>
-                    <Text style={[styles.previewQuestion, { color: colors.textSecondary }]}>Does this look right?</Text>
+                    <Text style={[styles.previewQuestion, { color: colors.textSecondary }]}>When did you eat this?</Text>
+                    <View style={[styles.timeRow, { backgroundColor: colors.cardElevated }]}>
+                      {(["breakfast", "lunch", "dinner"] as MealTime[]).map((slot) => (
+                        <TouchableOpacity
+                          key={slot}
+                          style={[styles.timeBtn, mealTime === slot && { backgroundColor: colors.accent }]}
+                          onPress={() => setMealTime(slot)}
+                        >
+                          <Text style={[styles.timeBtnText, { color: mealTime === slot ? "#fff" : colors.textSecondary }]}>
+                            {slot.charAt(0).toUpperCase() + slot.slice(1)}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
                     <View style={styles.confirmRow}>
                       <TouchableOpacity
                         style={[styles.confirmBtn, { backgroundColor: colors.accentGreen }]}
@@ -361,10 +415,10 @@ export default function HealthScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Save as Recipe prompt */}
+      {/* Save as Recipe prompt — centered, no autoFocus to avoid keyboard covering it */}
       <Modal visible={showSaveRecipe} transparent animationType="fade" onRequestClose={() => setShowSaveRecipe(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
+        <View style={styles.recipeModalOverlay}>
+          <View style={[styles.recipeModalCard, { backgroundColor: colors.card }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>Save as Recipe?</Text>
             <TextInput
               style={[styles.textInput, { backgroundColor: colors.inputBg, color: colors.text, minHeight: 0 }]}
@@ -372,7 +426,6 @@ export default function HealthScreen() {
               onChangeText={setRecipeName}
               placeholder="Recipe name"
               placeholderTextColor={colors.textTertiary}
-              autoFocus
             />
             <View style={styles.confirmRow}>
               <TouchableOpacity
@@ -442,6 +495,12 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" },
   modalSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
   modalTitle: { fontSize: 17, fontWeight: "600", marginBottom: 16 },
+  recipeModalOverlay: { flex: 1, backgroundColor: "#00000088", justifyContent: "center", paddingHorizontal: 24 },
+  recipeModalCard: { borderRadius: 16, padding: 24 },
+  // Meal time picker
+  timeRow: { flexDirection: "row", borderRadius: 10, padding: 3, marginBottom: 14 },
+  timeBtn: { flex: 1, paddingVertical: 8, alignItems: "center", borderRadius: 8 },
+  timeBtnText: { fontSize: 13, fontWeight: "500" },
   tabRow: { flexDirection: "row", borderRadius: 10, padding: 3, marginBottom: 16 },
   tabBtn: { flex: 1, paddingVertical: 8, alignItems: "center", borderRadius: 8 },
   tabText: { fontSize: 14, fontWeight: "500" },

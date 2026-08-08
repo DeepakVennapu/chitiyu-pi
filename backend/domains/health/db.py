@@ -4,12 +4,20 @@ from datetime import datetime, timezone
 
 def insert_meal(conn: sqlite3.Connection, user_id: int, description: str,
                 calories: int, protein: float, fat: float | None, carbs: float | None,
-                source: str = "text", recipe_id: int | None = None) -> int:
-    cur = conn.execute(
-        "INSERT INTO meals(user_id, description, calories, protein, fat, carbs, source, recipe_id) "
-        "VALUES (?,?,?,?,?,?,?,?)",
-        (user_id, description, calories, protein, fat, carbs, source, recipe_id)
-    )
+                source: str = "text", recipe_id: int | None = None,
+                logged_at: str | None = None) -> int:
+    if logged_at:
+        cur = conn.execute(
+            "INSERT INTO meals(user_id, description, calories, protein, fat, carbs, source, recipe_id, logged_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (user_id, description, calories, protein, fat, carbs, source, recipe_id, logged_at)
+        )
+    else:
+        cur = conn.execute(
+            "INSERT INTO meals(user_id, description, calories, protein, fat, carbs, source, recipe_id) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (user_id, description, calories, protein, fat, carbs, source, recipe_id)
+        )
     conn.commit()
     return cur.lastrowid
 

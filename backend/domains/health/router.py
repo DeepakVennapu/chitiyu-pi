@@ -63,6 +63,7 @@ class MealLogParsed(BaseModel):
     protein: float
     fat: float | None = None
     carbs: float | None = None
+    logged_at: str | None = None  # ISO 8601 — if omitted, defaults to now
 
 
 @router.post("/meals")
@@ -117,7 +118,7 @@ def log_meal_parsed(body: MealLogParsed):
     from domains.health.formatter import format_meal_confirmation
     conn = _conn()
     insert_meal(conn, body.user_id, body.description, body.calories,
-                body.protein, body.fat, body.carbs)
+                body.protein, body.fat, body.carbs, logged_at=body.logged_at)
     conn.close()
     try:
         from orchestrator.insights import trigger_insights_async

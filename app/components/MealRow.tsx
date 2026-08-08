@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { View, Text, Animated, PanResponder, StyleSheet } from "react-native";
+import { View, Text, Animated, PanResponder, StyleSheet, TouchableOpacity } from "react-native";
 import type { Meal } from "../lib/api";
 import type { Colors } from "../lib/theme";
 
@@ -25,7 +25,7 @@ export function MealRow({ meal, onDelete, colors }: Props) {
     onPanResponderRelease: (_, { dx }) => {
       if (dx < SWIPE_THRESHOLD) {
         Animated.timing(translateX, { toValue: -120, duration: 150, useNativeDriver: true }).start(
-          () => onDelete(meal.id)
+          () => { if (meal?.id != null) onDelete(meal.id); }
         );
       } else {
         Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
@@ -33,14 +33,26 @@ export function MealRow({ meal, onDelete, colors }: Props) {
     },
   });
 
-  const formatTime = (iso: string) =>
-    new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const formatTime = (iso: string | null | undefined) => {
+    if (!iso) return "";
+    // SQLite stores UTC with no Z — append it so JS doesn't misread as local time
+    const s = iso.includes("Z") || iso.includes("+") ? iso : iso.replace(" ", "T") + "Z";
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  };
 
   return (
     <View style={styles.container}>
-      <Animated.View style={[styles.deleteBackground, { opacity: deleteOpacity, backgroundColor: colors.swipeDelete }]}>
-        <Text style={styles.deleteLabel}>Delete</Text>
-      </Animated.View>
+      <TouchableOpacity
+        style={[styles.deleteBackground, { backgroundColor: colors.swipeDelete }]}
+        onPress={() => { if (meal?.id != null) onDelete(meal.id); }}
+        activeOpacity={0.8}
+      >
+        <Animated.View style={{ opacity: deleteOpacity, alignItems: "center" }}>
+          <Text style={styles.deleteLabel}>Delete</Text>
+        </Animated.View>
+      </TouchableOpacity>
       <Animated.View
         style={[styles.row, { transform: [{ translateX }], backgroundColor: colors.background, borderBottomColor: colors.border }]}
         {...panResponder.panHandlers}

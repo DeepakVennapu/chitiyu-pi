@@ -73,9 +73,11 @@ export interface MealTotals {
   carbs: number;
 }
 
+// Backend returns { meals, metrics, summary } — no totals key. Totals are summed client-side.
 export interface MealsResponse {
   meals: Meal[];
-  totals: MealTotals;
+  metrics: HealthMetrics | null;
+  summary: string;
 }
 
 export interface HealthMetrics {
@@ -127,13 +129,14 @@ export const getMealPreview = (text: string) =>
 export const logMealFromRecipe = (recipeId: number) =>
   request<{ result: string }>("POST", "/health/meals/from-recipe", { recipe_id: recipeId });
 
-export const logMealParsed = (data: MealPreviewResult) =>
+export const logMealParsed = (data: MealPreviewResult, loggedAt?: string) =>
   request<LogMealResponse>("POST", "/health/meals/log-parsed", {
     description: data.description,
     calories: data.calories,
     protein: data.protein,
     fat: data.fat ?? null,
     carbs: data.carbs ?? null,
+    logged_at: loggedAt ?? null,
   });
 
 export const getRecipes = () =>
@@ -236,8 +239,11 @@ export const getTasksOverdue = () =>
 export const getTasksToday = () =>
   request<Task[]>("GET", "/tasks/today");
 
-export const addTask = (title: string) =>
-  request<Task>("POST", "/tasks/", { title });
+export const addTask = (title: string, due_at?: string) =>
+  request<Task>("POST", "/tasks/", { title, ...(due_at ? { due_at } : {}) });
+
+export const getTasksByDate = (date: string) =>
+  request<Task[]>("GET", `/tasks/by-date?date=${encodeURIComponent(date)}`);
 
 export const completeTask = (id: number) =>
   request<{ ok: boolean }>("PATCH", `/tasks/${id}/complete`, {});
