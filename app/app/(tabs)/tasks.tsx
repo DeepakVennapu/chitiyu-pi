@@ -412,27 +412,29 @@ export default function TasksScreen() {
     }
   };
 
-  const handleComplete = async (id: number) => {
-    const task = [...overdue, ...dateTasks].find((t) => t.id === id);
+  const handleComplete = async (uid: string) => {
+    const task = [...overdue, ...dateTasks].find((t) => (t.uid ?? `t:${t.id}`) === uid);
+    const numericId = parseInt(uid.split(":")[1]);
     if (task?.is_recurring) {
-      await completeInstance(id);
+      await completeInstance(numericId);
     } else {
-      await completeTask(id);
+      await completeTask(numericId);
     }
-    setOverdue((prev) => prev.filter((t) => t.id !== id));
-    setDateTasks((prev) => prev.filter((t) => t.id !== id));
+    setOverdue((prev) => prev.filter((t) => (t.uid ?? `t:${t.id}`) !== uid));
+    setDateTasks((prev) => prev.filter((t) => (t.uid ?? `t:${t.id}`) !== uid));
     loadSummary();
   };
 
-  const handleDelete = async (id: number) => {
-    const task = [...overdue, ...dateTasks].find((t) => t.id === id);
+  const handleDelete = async (uid: string) => {
+    const task = [...overdue, ...dateTasks].find((t) => (t.uid ?? `t:${t.id}`) === uid);
+    const numericId = parseInt(uid.split(":")[1]);
     if (task?.is_recurring) {
-      await deleteInstance(id);
+      await deleteInstance(numericId);
     } else {
-      await deleteTask(id);
+      await deleteTask(numericId);
     }
-    setOverdue((prev) => prev.filter((t) => t.id !== id));
-    setDateTasks((prev) => prev.filter((t) => t.id !== id));
+    setOverdue((prev) => prev.filter((t) => (t.uid ?? `t:${t.id}`) !== uid));
+    setDateTasks((prev) => prev.filter((t) => (t.uid ?? `t:${t.id}`) !== uid));
     loadSummary();
   };
 
@@ -494,7 +496,7 @@ export default function TasksScreen() {
             </View>
             <View style={[styles.overdueContainer, { backgroundColor: colors.overdueStripe, borderLeftColor: colors.accentRed }]}>
               {overdue.map((task) => (
-                <TaskRow key={task.id} task={task} onComplete={handleComplete} onDelete={handleDelete} />
+                <TaskRow key={task.uid ?? `t:${task.id}`} task={task} onComplete={handleComplete} onDelete={handleDelete} />
               ))}
             </View>
           </View>
@@ -506,7 +508,7 @@ export default function TasksScreen() {
             <Text style={{ color: colors.textSecondary, fontSize: 14 }}>No tasks for this day.</Text>
           )}
           {dateTasks.map((task) => (
-            <TaskRow key={task.id} task={task} onComplete={handleComplete} onDelete={handleDelete} />
+            <TaskRow key={task.uid ?? `t:${task.id}`} task={task} onComplete={handleComplete} onDelete={handleDelete} />
           ))}
         </View>
       </ScrollView>

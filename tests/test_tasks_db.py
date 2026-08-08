@@ -115,7 +115,7 @@ def test_complete_instance(conn, user_id):
     iid = instances[0]["id"]
     assert complete_instance(conn, user_id, iid) is True
     instances2 = spawn_instances_for_date(conn, user_id, today)
-    assert instances2[0]["completed_at"] is not None
+    assert instances2 == []
 
 
 def test_delete_instance(conn, user_id):
@@ -126,3 +126,13 @@ def test_delete_instance(conn, user_id):
     assert delete_instance(conn, user_id, iid) is True
     instances2 = spawn_instances_for_date(conn, user_id, today)
     assert instances2 == []
+
+
+def test_dates_summary_includes_template_dates(conn, user_id):
+    insert_template(conn, user_id, "Weekly call", "weekly", "2026-08-11", advance_days=1)
+    result = get_dates_summary(conn, user_id, "2026-08-01", "2026-08-31")
+    # 2026-08-11 is a Tuesday, so all Tuesdays in August should appear
+    assert "2026-08-11" in result
+    assert "2026-08-18" in result
+    assert "2026-08-25" in result
+    assert result["2026-08-11"] == 0

@@ -15,6 +15,10 @@ router = APIRouter(prefix="/tasks", tags=["tasks"],
                    dependencies=[Depends(verify_api_key)])
 
 
+def _with_uid(task: dict) -> dict:
+    return {**task, "uid": f"t:{task['id']}"}
+
+
 def _conn():
     c = get_connection(DB_PATH)
     initialize_schema(c)
@@ -41,15 +45,15 @@ def create(body: TaskCreate):
     conn = _conn()
     task_id = insert_task(conn, body.user_id, body.title, body.due_at, body.priority)
     conn.close()
-    return {"id": task_id, "title": body.title, "due_at": body.due_at,
-            "completed_at": None, "priority": body.priority, "tags": [],
-            "is_recurring": False}
+    return _with_uid({"id": task_id, "title": body.title, "due_at": body.due_at,
+                      "completed_at": None, "priority": body.priority, "tags": [],
+                      "is_recurring": False})
 
 
 @router.get("/")
 def list_all(user_id: int = 1):
     conn = _conn()
-    tasks = [dict(t) for t in get_pending_tasks(conn, user_id)]
+    tasks = [_with_uid(dict(t)) for t in get_pending_tasks(conn, user_id)]
     conn.close()
     return tasks
 
@@ -67,7 +71,7 @@ def today(user_id: int = 1):
     from datetime import date
     today_iso = date.today().isoformat()
     conn = _conn()
-    tasks = [dict(t) for t in get_today_tasks(conn, user_id)]
+    tasks = [_with_uid(dict(t)) for t in get_today_tasks(conn, user_id)]
     instances = spawn_instances_for_date(conn, user_id, today_iso)
     conn.close()
     return tasks + instances
@@ -76,7 +80,7 @@ def today(user_id: int = 1):
 @router.get("/by-date")
 def by_date(date: str, user_id: int = 1):
     conn = _conn()
-    tasks = [dict(t) for t in get_tasks_by_date(conn, user_id, date)]
+    tasks = [_with_uid(dict(t)) for t in get_tasks_by_date(conn, user_id, date)]
     instances = spawn_instances_for_date(conn, user_id, date)
     conn.close()
     return tasks + instances

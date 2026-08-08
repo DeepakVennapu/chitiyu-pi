@@ -58,7 +58,23 @@ def get_dates_summary(conn: sqlite3.Connection, user_id: int,
         "GROUP BY date(due_at)",
         (user_id, start_iso, end_iso)
     ).fetchall()
-    return {row["d"]: row["max_p"] for row in rows}
+    result = {row["d"]: row["max_p"] for row in rows}
+
+    # Merge recurring template dates (priority 0 unless tasks already have a higher priority)
+    templates = get_active_templates(conn, user_id)
+    start = date_type.fromisoformat(start_iso)
+    end = date_type.fromisoformat(end_iso)
+    current = start
+    while current <= end:
+        iso = current.isoformat()
+        for t in templates:
+            t = dict(t)
+            if _template_fires_on(t["recurrence"], t["anchor_date"], iso):
+                if iso not in result:
+                    result[iso] = 0
+        current += timedelta(days=1)
+
+    return result
 
 
 def complete_task(conn: sqlite3.Connection, user_id: int, task_id: int) -> bool:
@@ -138,12 +154,13 @@ def spawn_instances_for_date(conn: sqlite3.Connection, user_id: int,
         conn.commit()
         row = conn.execute(
             "SELECT * FROM task_instances WHERE template_id=? AND user_id=? AND due_date=? "
-            "AND deleted_at IS NULL",
+            "AND deleted_at IS NULL AND completed_at IS NULL",
             (t["id"], user_id, date_iso)
         ).fetchone()
         if row:
             result.append({
                 "id": row["id"],
+                "uid": f"i:{row['id']}",
                 "template_id": t["id"],
                 "title": t["title"],
                 "due_date": date_iso,

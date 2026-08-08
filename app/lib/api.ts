@@ -225,6 +225,7 @@ export const setBudget = (category: string, amount: number) =>
 
 export interface Task {
   id: number;
+  uid?: string;
   title: string;
   due_at: string | null;
   completed_at: string | null;

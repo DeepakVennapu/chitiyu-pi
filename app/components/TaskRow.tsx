@@ -6,8 +6,8 @@ import { SwipeableRow } from "./SwipeableRow";
 
 interface Props {
   task: Task;
-  onComplete: (id: number) => void;
-  onDelete: (id: number) => void;
+  onComplete: (uid: string) => void;
+  onDelete: (uid: string) => void;
 }
 
 const PRIORITY_COLORS: Record<number, string | null> = {
@@ -20,17 +20,19 @@ export function TaskRow({ task, onComplete, onDelete }: Props) {
   const { colors } = useTheme();
   const dotColor = PRIORITY_COLORS[task.priority] ?? null;
 
+  const taskUid = task.uid ?? `t:${task.id}`;
+
   return (
     <SwipeableRow
       confirmTitle="Delete task?"
       confirmMessage={task.title}
-      onDelete={() => onDelete(task.id)}
+      onDelete={() => onDelete(taskUid)}
       backgroundColor={colors.card}
     >
       <View style={[styles.row, { borderBottomColor: colors.border }]}>
         <TouchableOpacity
           style={styles.checkbox}
-          onPress={() => onComplete(task.id)}
+          onPress={() => onComplete(taskUid)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <View style={[styles.checkCircle, { borderColor: colors.checkCircle }]} />
