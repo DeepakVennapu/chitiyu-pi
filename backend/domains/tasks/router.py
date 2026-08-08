@@ -6,9 +6,10 @@ from db.schema import initialize_schema
 from config import DB_PATH
 from domains.tasks.db import (
     insert_task, get_pending_tasks, get_overdue_tasks,
-    get_today_tasks, complete_task, delete_task
+    get_today_tasks, get_tasks_by_date, complete_task, delete_task,
+    get_dates_summary, insert_template, get_active_templates,
+    spawn_instances_for_date, complete_instance, delete_instance
 )
-from domains.tasks.formatter import format_task_list
 
 router = APIRouter(prefix="/tasks", tags=["tasks"],
                    dependencies=[Depends(verify_api_key)])
@@ -24,15 +25,25 @@ class TaskCreate(BaseModel):
     user_id: int = 1
     title: str
     due_at: str | None = None
+    priority: int = 0
+
+
+class TemplateCreate(BaseModel):
+    user_id: int = 1
+    title: str
+    recurrence: str
+    anchor_date: str
+    advance_days: int | None = None
 
 
 @router.post("/")
 def create(body: TaskCreate):
     conn = _conn()
-    task_id = insert_task(conn, body.user_id, body.title, body.due_at)
+    task_id = insert_task(conn, body.user_id, body.title, body.due_at, body.priority)
     conn.close()
     return {"id": task_id, "title": body.title, "due_at": body.due_at,
-            "completed_at": None, "priority": None, "tags": []}
+            "completed_at": None, "priority": body.priority, "tags": [],
+            "is_recurring": False}
 
 
 @router.get("/")
@@ -53,10 +64,62 @@ def overdue(user_id: int = 1):
 
 @router.get("/today")
 def today(user_id: int = 1):
+    from datetime import date
+    today_iso = date.today().isoformat()
     conn = _conn()
     tasks = [dict(t) for t in get_today_tasks(conn, user_id)]
+    instances = spawn_instances_for_date(conn, user_id, today_iso)
     conn.close()
-    return tasks
+    return tasks + instances
+
+
+@router.get("/by-date")
+def by_date(date: str, user_id: int = 1):
+    conn = _conn()
+    tasks = [dict(t) for t in get_tasks_by_date(conn, user_id, date)]
+    instances = spawn_instances_for_date(conn, user_id, date)
+    conn.close()
+    return tasks + instances
+
+
+@router.get("/dates-summary")
+def dates_summary(start: str, end: str, user_id: int = 1):
+    conn = _conn()
+    result = get_dates_summary(conn, user_id, start, end)
+    conn.close()
+    return result
+
+
+@router.post("/templates")
+def create_template(body: TemplateCreate):
+    default_advance = {"daily": 1, "weekly": 1, "monthly": 7, "yearly": 30}
+    advance = body.advance_days if body.advance_days is not None else default_advance.get(body.recurrence, 1)
+    conn = _conn()
+    tid = insert_template(conn, body.user_id, body.title, body.recurrence, body.anchor_date, advance)
+    conn.close()
+    return {"id": tid, "title": body.title, "recurrence": body.recurrence,
+            "anchor_date": body.anchor_date, "advance_days": advance}
+
+
+# Instance routes MUST come before /{task_id} routes to avoid path param collision
+@router.patch("/instances/{instance_id}/complete")
+def complete_inst(instance_id: int, user_id: int = 1):
+    conn = _conn()
+    ok = complete_instance(conn, user_id, instance_id)
+    conn.close()
+    if not ok:
+        raise HTTPException(404, "Instance not found or already complete")
+    return {"ok": True}
+
+
+@router.delete("/instances/{instance_id}")
+def delete_inst(instance_id: int, user_id: int = 1):
+    conn = _conn()
+    ok = delete_instance(conn, user_id, instance_id)
+    conn.close()
+    if not ok:
+        raise HTTPException(404, "Instance not found")
+    return {"ok": True}
 
 
 @router.patch("/{task_id}/complete")
