@@ -18,7 +18,7 @@ import {
 import { useTheme } from "../../lib/theme";
 import { todayLocal } from "../../lib/dateUtils";
 
-const EXPENSE_CATEGORIES = ["Food", "Groceries", "Transport", "Entertainment", "Health", "Shopping", "Bills", "Other"];
+const EXPENSE_CATEGORIES = ["groceries", "dining", "fuel", "shopping", "misc", "home", "travel", "insurance", "gifts", "other"];
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -757,7 +757,7 @@ export default function FinanceScreen() {
                     style={[s.pill, { backgroundColor: selectedCategory === cat ? colors.accent : colors.cardElevated }]}
                     onPress={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
                   >
-                    <Text style={[s.pillText, { color: selectedCategory === cat ? "#fff" : colors.textSecondary }]}>{cat}</Text>
+                    <Text style={[s.pillText, { color: selectedCategory === cat ? "#fff" : colors.textSecondary }]}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
