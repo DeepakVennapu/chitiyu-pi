@@ -155,7 +155,6 @@ export default function KnowledgeScreen() {
                   </Text>
                 </View>
               </View>
-              {/* fact_count is 0 for MVP — backend GET /knowledge/entities doesn't join facts table yet */}
               {(entity.fact_count ?? 0) > 0 && (
                 <Text style={[styles.factCount, { color: colors.textSecondary }]}>
                   {entity.fact_count} {entity.fact_count === 1 ? "fact" : "facts"}

@@ -56,5 +56,12 @@ def delete_entity_by_name(conn: sqlite3.Connection, user_id: int, name: str) -> 
 
 
 def get_all_entities(conn: sqlite3.Connection, user_id: int) -> list:
-    return conn.execute("SELECT * FROM entities WHERE user_id=? ORDER BY name",
-                        (user_id,)).fetchall()
+    return conn.execute(
+        """SELECT e.*, COUNT(f.id) AS fact_count
+           FROM entities e
+           LEFT JOIN facts f ON f.entity_id = e.id AND f.user_id = e.user_id
+           WHERE e.user_id = ?
+           GROUP BY e.id
+           ORDER BY e.name""",
+        (user_id,)
+    ).fetchall()
