@@ -37,6 +37,7 @@ from domains.finance.db import (
     upsert_milestone,
     get_monthly_spend,
     get_budget,
+    get_envelope_spend,
 )
 from domains.finance.formatter import format_budget_summary
 
@@ -377,6 +378,126 @@ def budget_summary(year: int, month: int, user_id: int = 1):
             "next_milestone": next_ms,
             "categories": categories,
             "by_type": by_type,
+        }
+    finally:
+        conn.close()
+
+
+# ── Insights context ──────────────────────────────────────────────────────────
+
+@router.get("/insights-context")
+def finance_insights_context(user_id: int = 1):
+    """Rich financial context for the insights engine — trajectory, trends, envelope burn."""
+    from datetime import date
+    conn = _conn()
+    try:
+        today = date.today()
+        year, month = today.year, today.month
+
+        # Current month spend vs budget
+        spend = get_monthly_spend(conn, user_id, year, month)
+        budgets = list_budgets(conn, user_id)
+        disc_spent, disc_budget = get_discretionary_total(conn, user_id, year, month)
+
+        # Last 3 months discretionary trend
+        disc_trend = []
+        for i in range(2, -1, -1):
+            m = month - i
+            y = year
+            if m <= 0:
+                m += 12
+                y -= 1
+            ds, db = get_discretionary_total(conn, user_id, y, m)
+            import calendar
+            disc_trend.append({
+                "month": f"{y}-{m:02d}",
+                "spent": ds,
+                "budget": db,
+                "pct_used": round(ds / db * 100, 1) if db else 0,
+            })
+
+        # Milestone trajectory — last 6 + next 6
+        all_milestones = list_milestones(conn, user_id)
+        past = [m for m in all_milestones if m["target_date"] <= today.isoformat()][-6:]
+        upcoming = [m for m in all_milestones if m["target_date"] > today.isoformat()][:6]
+
+        # Chase balance — current vs last milestone actual
+        chase_row = conn.execute(
+            """SELECT ab.balance, ab.date FROM account_balances ab
+               JOIN accounts a ON a.id = ab.account_id
+               WHERE ab.user_id=? AND LOWER(a.name) LIKE '%chase%' AND a.type='checking'
+               ORDER BY ab.date DESC LIMIT 1""",
+            (user_id,)
+        ).fetchone()
+        chase_current = dict(chase_row) if chase_row else None
+
+        pnc_row = conn.execute(
+            """SELECT ab.balance, ab.date FROM account_balances ab
+               JOIN accounts a ON a.id = ab.account_id
+               WHERE ab.user_id=? AND LOWER(a.name) LIKE '%pnc%'
+               ORDER BY ab.date DESC LIMIT 1""",
+            (user_id,)
+        ).fetchone()
+        pnc_current = dict(pnc_row) if pnc_row else None
+
+        # Net worth snapshot
+        balances = get_latest_balances(conn, user_id)
+        net_worth = compute_net_worth_from_balances(conn, user_id)
+
+        # Envelope burn
+        envelopes = get_envelope_spend(conn, user_id)
+
+        # Category spend this month
+        budget_map = {b["category"]: b for b in budgets}
+        category_status = []
+        for cat, spent_val in spend.items():
+            b = budget_map.get(cat)
+            if b and b["budget_type"] == "discretionary":
+                category_status.append({
+                    "category": cat,
+                    "spent": round(spent_val, 2),
+                    "budget": b["amount"],
+                    "over_budget": spent_val > b["amount"],
+                })
+
+        return {
+            "as_of": today.isoformat(),
+            "chase_checking": chase_current,
+            "pnc_savings": pnc_current,
+            "net_worth": net_worth,
+            "discretionary": {
+                "this_month": {"spent": disc_spent, "budget": disc_budget,
+                               "remaining": round(disc_budget - disc_spent, 2)},
+                "trend_3mo": disc_trend,
+                "categories": category_status,
+            },
+            "milestone": {
+                "goal": "Chase Checking = $21,554.95 by 2027-01-29",
+                "next": get_next_milestone(conn, user_id),
+                "recent_history": [
+                    {
+                        "date": m["target_date"],
+                        "target": m["expected_net_worth"],
+                        "actual": m["actual_net_worth"],
+                        "delta": round(m["actual_net_worth"] - m["expected_net_worth"], 2)
+                        if m["actual_net_worth"] is not None else None,
+                        "status": "ahead" if m["actual_net_worth"] is not None
+                                  and m["actual_net_worth"] >= m["expected_net_worth"]
+                                  else ("behind" if m["actual_net_worth"] is not None else "pending"),
+                    }
+                    for m in past
+                ],
+                "upcoming": [
+                    {"date": m["target_date"], "target": m["expected_net_worth"]}
+                    for m in upcoming
+                ],
+            },
+            "envelopes": envelopes,
+            "accounts": [
+                {"name": b["account_name"], "type": b["account_type"],
+                 "balance": b["balance"], "as_of": b["date"]}
+                for b in balances
+            ],
         }
     finally:
         conn.close()

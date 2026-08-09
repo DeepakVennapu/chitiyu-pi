@@ -1,5 +1,6 @@
 import sqlite3
 from datetime import datetime, timezone
+from utils.local_time import local_now, today_local
 
 
 def insert_task(conn: sqlite3.Connection, user_id: int, title: str,
@@ -21,7 +22,7 @@ def get_pending_tasks(conn: sqlite3.Connection, user_id: int) -> list:
 
 
 def get_overdue_tasks(conn: sqlite3.Connection, user_id: int) -> list:
-    now = datetime.now(timezone.utc).isoformat()
+    now = local_now().isoformat()
     return conn.execute(
         "SELECT * FROM tasks WHERE user_id=? AND completed_at IS NULL AND due_at < ? "
         "ORDER BY priority DESC, due_at ASC NULLS LAST",
@@ -30,7 +31,7 @@ def get_overdue_tasks(conn: sqlite3.Connection, user_id: int) -> list:
 
 
 def get_today_tasks(conn: sqlite3.Connection, user_id: int) -> list:
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = today_local()
     return conn.execute(
         "SELECT * FROM tasks WHERE user_id=? AND completed_at IS NULL "
         "AND date(due_at) = ? "

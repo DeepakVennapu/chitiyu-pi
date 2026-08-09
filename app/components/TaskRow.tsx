@@ -46,7 +46,7 @@ export function TaskRow({ task, onComplete, onDelete }: Props) {
           </View>
           {task.due_at && (
             <Text style={[styles.due, { color: colors.textSecondary }]}>
-              Due {new Date(task.due_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              Due {new Date(task.due_at.slice(0, 10) + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
             </Text>
           )}
         </View>

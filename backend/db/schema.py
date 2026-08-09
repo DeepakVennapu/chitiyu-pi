@@ -9,15 +9,15 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             name       TEXT NOT NULL,
             type       TEXT NOT NULL CHECK(type IN ('person','project','vendor','place','concept','generic')),
             aliases    TEXT NOT NULL DEFAULT '[]',
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime')),
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime'))
         );
         CREATE TABLE IF NOT EXISTS facts (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id    INTEGER NOT NULL DEFAULT 1,
             entity_id  INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
             content    TEXT NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime'))
         );
         CREATE TABLE IF NOT EXISTS fields (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,7 +26,7 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             key        TEXT NOT NULL,
             value      TEXT NOT NULL,
             type       TEXT NOT NULL DEFAULT 'text',
-            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime')),
             UNIQUE(entity_id, key)
         );
         CREATE TABLE IF NOT EXISTS relationships (
@@ -35,7 +35,7 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             from_entity_id INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
             label          TEXT NOT NULL,
             to_entity_id   INTEGER NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-            created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+            created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime'))
         );
         CREATE TABLE IF NOT EXISTS events (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,7 +45,7 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             event_date TEXT NOT NULL,
             recurrence TEXT NOT NULL DEFAULT 'none' CHECK(recurrence IN ('none','annual')),
             notes      TEXT,
-            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime'))
         );
         CREATE TABLE IF NOT EXISTS tasks (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,7 +55,7 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             completed_at TEXT,
             priority     INTEGER NOT NULL DEFAULT 0,
             tags         TEXT NOT NULL DEFAULT '[]',
-            created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+            created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime'))
         );
         CREATE TABLE IF NOT EXISTS recipes (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,12 +66,12 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             fat          REAL,
             carbs        REAL,
             serving_unit TEXT,
-            created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+            created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime'))
         );
         CREATE TABLE IF NOT EXISTS meals (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id     INTEGER NOT NULL DEFAULT 1,
-            logged_at   TEXT NOT NULL DEFAULT (datetime('now')),
+            logged_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime')),
             description TEXT NOT NULL,
             calories    INTEGER NOT NULL,
             protein     REAL NOT NULL,
@@ -103,7 +103,7 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             raw_text   TEXT NOT NULL,
             summary    TEXT,
             retro_json TEXT,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime')),
             UNIQUE(user_id, date)
         );
         CREATE TABLE IF NOT EXISTS pending_state (
@@ -111,7 +111,7 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             user_id    INTEGER NOT NULL DEFAULT 1,
             type       TEXT NOT NULL,
             payload    TEXT NOT NULL DEFAULT '{}',
-            sent_at    TEXT NOT NULL DEFAULT (datetime('now')),
+            sent_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime')),
             UNIQUE(user_id, type)
         );
         CREATE TABLE IF NOT EXISTS notification_events (
@@ -120,7 +120,7 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             domain       TEXT NOT NULL,
             event_type   TEXT NOT NULL,
             payload_json TEXT NOT NULL DEFAULT '{}',
-            created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+            created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime')),
             delivered_at TEXT
         );
         CREATE TABLE IF NOT EXISTS accounts (
@@ -140,7 +140,7 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             date       TEXT NOT NULL,
             balance    REAL NOT NULL,
             note       TEXT,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime')),
             UNIQUE(account_id, date)
         );
         CREATE INDEX IF NOT EXISTS idx_account_balances_user_date
@@ -157,7 +157,7 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             expected_net_worth  REAL NOT NULL,
             actual_net_worth    REAL,
             note                TEXT,
-            created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+            created_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime')),
             UNIQUE(user_id, target_date)
         );
         CREATE INDEX IF NOT EXISTS idx_milestones_user_date
@@ -171,7 +171,7 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             category    TEXT NOT NULL DEFAULT 'uncategorized',
             description TEXT NOT NULL,
             source      TEXT NOT NULL DEFAULT 'manual' CHECK(source IN ('manual','csv')),
-            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime'))
         );
         CREATE INDEX IF NOT EXISTS idx_transactions_user_date
             ON transactions(user_id, date);
@@ -186,7 +186,7 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
                         CHECK(period IN ('monthly','weekly','biannual','annual')),
             budget_type TEXT NOT NULL DEFAULT 'discretionary'
                         CHECK(budget_type IN ('fixed','recurring','discretionary','envelope')),
-            start_date  TEXT NOT NULL DEFAULT (date('now')),
+            start_date  TEXT NOT NULL DEFAULT (date('now', 'localtime')),
             UNIQUE(user_id, category, period)
         );
         CREATE TABLE IF NOT EXISTS net_worth (
@@ -205,7 +205,7 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             target_amount  REAL NOT NULL,
             current_amount REAL NOT NULL DEFAULT 0.0,
             target_date    TEXT,
-            created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+            created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime')),
             UNIQUE(user_id, name)
         );
         CREATE TABLE IF NOT EXISTS insights (
@@ -213,7 +213,7 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             user_id      INTEGER NOT NULL DEFAULT 1,
             scope        TEXT NOT NULL CHECK(scope IN ('today','week')),
             cards_json   TEXT NOT NULL,
-            generated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            generated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime')),
             UNIQUE(user_id, scope)
         );
         CREATE TABLE IF NOT EXISTS task_templates (
@@ -223,7 +223,7 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             recurrence   TEXT NOT NULL DEFAULT 'none' CHECK(recurrence IN ('none','daily','weekly','monthly','yearly')),
             anchor_date  TEXT NOT NULL,
             advance_days INTEGER NOT NULL DEFAULT 1,
-            created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+            created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime'))
         );
         CREATE TABLE IF NOT EXISTS task_instances (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -232,7 +232,7 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             due_date     TEXT NOT NULL,
             completed_at TEXT,
             deleted_at   TEXT,
-            created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+            created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime')),
             UNIQUE(template_id, due_date)
         );
         CREATE INDEX IF NOT EXISTS idx_task_instances_user_due

@@ -15,6 +15,7 @@ import {
   type Account, type AccountBalance, type BalanceEntry, type FinancialMilestone,
 } from "../../lib/api";
 import { useTheme } from "../../lib/theme";
+import { todayLocal } from "../../lib/dateUtils";
 
 const EXPENSE_CATEGORIES = ["Food", "Groceries", "Transport", "Entertainment", "Health", "Shopping", "Bills", "Other"];
 
@@ -49,7 +50,7 @@ function MilestoneRow({ m }: { m: FinancialMilestone }) {
   const label = date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   const hasActual = m.actual_net_worth != null;
   const ahead = hasActual && m.actual_net_worth! >= m.expected_net_worth;
-  const isPast = new Date(m.target_date) <= new Date();
+  const isPast = m.target_date <= todayLocal();
   const dotColor = !isPast ? colors.textTertiary : ahead ? colors.accentGreen : colors.accentRed;
 
   return (

@@ -154,6 +154,33 @@ def get_discretionary_total(conn: sqlite3.Connection, user_id: int,
     return round(spent_row["total"], 2), round(budget_row["total"], 2)
 
 
+def get_envelope_spend(conn: sqlite3.Connection, user_id: int) -> list[dict]:
+    """Returns YTD spend for each envelope category vs its pool amount."""
+    from datetime import date
+    year = date.today().year
+    envelopes = conn.execute(
+        "SELECT category, amount, period FROM budgets WHERE user_id=? AND budget_type='envelope'",
+        (user_id,)
+    ).fetchall()
+    result = []
+    for e in envelopes:
+        row = conn.execute(
+            """SELECT COALESCE(ABS(SUM(amount)), 0) as spent
+               FROM transactions
+               WHERE user_id=? AND category=? AND amount < 0
+                 AND strftime('%Y', date)=?""",
+            (user_id, e["category"], str(year))
+        ).fetchone()
+        result.append({
+            "category": e["category"],
+            "pool": e["amount"],
+            "period": e["period"],
+            "spent_ytd": round(row["spent"], 2),
+            "remaining": round(e["amount"] - row["spent"], 2),
+        })
+    return result
+
+
 def get_next_milestone(conn: sqlite3.Connection, user_id: int) -> dict | None:
     """Returns the next upcoming milestone with the latest Chase checking balance."""
     from datetime import date

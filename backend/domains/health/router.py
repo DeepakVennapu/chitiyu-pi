@@ -198,3 +198,73 @@ def summary(date: str, user_id: int = 1):
     conn.close()
     return {"date": date, "meals": meals, "metrics": metrics,
             "summary": format_today_summary(meals, metrics)}
+
+
+@router.get("/insights-context")
+def health_insights_context(user_id: int = 1, days: int = 7):
+    """Aggregated health trends for the insights engine."""
+    from datetime import date, timedelta
+    conn = _conn()
+    try:
+        today = date.today()
+        dates = [(today - timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
+
+        daily = []
+        for d in dates:
+            meals = [dict(m) for m in get_meals_for_date(conn, user_id, d)]
+            metrics = get_metrics_for_date(conn, user_id, d)
+            kcal = sum(m["calories"] for m in meals)
+            protein = sum(m["protein"] for m in meals)
+            daily.append({
+                "date": d,
+                "meals_logged": len(meals),
+                "kcal": kcal,
+                "protein": round(protein, 1),
+                "steps": metrics["steps"] if metrics else None,
+                "sleep_total_mins": metrics["sleep_total_mins"] if metrics else None,
+                "sleep_deep_mins": metrics["sleep_deep_mins"] if metrics else None,
+                "resting_hr": metrics["resting_hr"] if metrics else None,
+            })
+
+        days_with_meals = [d for d in daily if d["meals_logged"] > 0]
+        days_with_metrics = [d for d in daily if d["steps"] is not None]
+
+        def avg(vals):
+            v = [x for x in vals if x is not None]
+            return round(sum(v) / len(v), 1) if v else None
+
+        targets = {
+            "kcal": 1500,
+            "protein_g": 150,
+            "steps": 10000,
+            "sleep_deep_mins": 60,
+        }
+
+        hit_kcal = sum(1 for d in days_with_meals if 0 < d["kcal"] <= targets["kcal"])
+        hit_protein = sum(1 for d in days_with_meals if d["protein"] >= targets["protein_g"])
+        hit_steps = sum(1 for d in days_with_metrics if (d["steps"] or 0) >= targets["steps"])
+        hit_deep = sum(1 for d in days_with_metrics
+                       if (d["sleep_deep_mins"] or 0) >= targets["sleep_deep_mins"])
+
+        return {
+            "as_of": today.isoformat(),
+            "window_days": days,
+            "targets": targets,
+            "averages": {
+                "kcal": avg([d["kcal"] for d in days_with_meals]),
+                "protein_g": avg([d["protein"] for d in days_with_meals]),
+                "steps": avg([d["steps"] for d in days_with_metrics]),
+                "sleep_total_mins": avg([d["sleep_total_mins"] for d in days_with_metrics]),
+                "sleep_deep_mins": avg([d["sleep_deep_mins"] for d in days_with_metrics]),
+                "resting_hr": avg([d["resting_hr"] for d in days_with_metrics]),
+            },
+            "target_hit_rate": {
+                "kcal_on_target": f"{hit_kcal}/{len(days_with_meals)} days",
+                "protein_on_target": f"{hit_protein}/{len(days_with_meals)} days",
+                "steps_on_target": f"{hit_steps}/{len(days_with_metrics)} days",
+                "deep_sleep_on_target": f"{hit_deep}/{len(days_with_metrics)} days",
+            },
+            "daily": daily,
+        }
+    finally:
+        conn.close()
