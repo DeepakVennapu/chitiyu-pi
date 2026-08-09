@@ -54,9 +54,9 @@ class FinanceDomain(BaseDomain):
         return _SYSTEM
 
     def inject_context(self, conn: sqlite3.Connection, user_id: int, message: str) -> str:
-        from datetime import datetime, timezone
+        from utils.local_time import local_now
         from domains.finance.db import get_monthly_spend, list_budgets
-        today = datetime.now(timezone.utc).date()
+        today = local_now().date()
         try:
             spend = get_monthly_spend(conn, user_id, today.year, today.month)
             budgets = list_budgets(conn, user_id)

@@ -2,7 +2,7 @@
 import json
 import re
 import sqlite3
-from datetime import datetime, timezone
+from utils.local_time import local_now, today_local
 
 from config import DISPATCH_MODEL
 from domains.finance.db import (
@@ -40,7 +40,7 @@ Input: {text}"""
 
 def _parse_transaction_text(text: str, context: str = "") -> dict | None:
     """Parse NL expense text via Haiku. Returns structured dict or None on parse failure."""
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = today_local()
     prompt = _PARSE_EXPENSE_PROMPT.format(today=today, context=context, text=text)
     raw = call_claude(prompt, model=DISPATCH_MODEL, timeout=20)
     m = re.search(r'\{.*\}', raw, re.DOTALL)
@@ -82,7 +82,7 @@ def _fire_budget_event(conn: sqlite3.Connection, user_id: int,
 def add_transaction(conn: sqlite3.Connection, user_id: int,
                     text: str, context: str = "") -> str:
     """Telegram/orchestrator path — parses NL text, inserts, returns human-readable string."""
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = today_local()
     data = _parse_transaction_text(text, context)
     if not data:
         return "Couldn't parse that expense. Try: 'spent $45 at Whole Foods on groceries'."
@@ -110,7 +110,7 @@ def add_transaction_structured(conn: sqlite3.Connection, user_id: int,
                                text: str, context: str = "") -> dict | None:
     """App/REST path — parses NL text, inserts, returns the inserted row as a dict.
     Returns None if the text cannot be parsed (caller raises HTTP 422)."""
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = today_local()
     data = _parse_transaction_text(text, context)
     if not data:
         return None
@@ -152,7 +152,7 @@ def list_transactions_tool(conn: sqlite3.Connection, user_id: int,
 
 def get_budget_summary(conn: sqlite3.Connection, user_id: int,
                        year: int | None = None, month: int | None = None) -> str:
-    today = datetime.now(timezone.utc).date()
+    today = local_now().date()
     y = year if year is not None else today.year
     m = month if month is not None else today.month
     spend = get_monthly_spend(conn, user_id, y, m)
@@ -176,7 +176,7 @@ def add_net_worth_snapshot(conn: sqlite3.Connection, user_id: int,
                            assets_json: dict | None = None,
                            liabilities_json: dict | None = None,
                            total: float | None = None) -> str:
-    date = snapshot_date or datetime.now(timezone.utc).date().isoformat()
+    date = snapshot_date or today_local()
     assets = assets_json or {}
     liabilities = liabilities_json or {}
     if total is None:

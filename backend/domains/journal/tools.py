@@ -1,6 +1,6 @@
 import sqlite3
-from datetime import datetime, timezone
 from orchestrator.llm import call_claude
+from utils.local_time import today_local
 from domains.journal.db import upsert_entry
 from config import POLISH_MODEL
 
@@ -10,7 +10,7 @@ Entry: {text}"""
 
 
 def save_journal_entry(conn: sqlite3.Connection, user_id: int, text: str) -> str:
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = today_local()
     try:
         summary = call_claude(_SUMMARIZE.format(text=text), model=POLISH_MODEL, timeout=30)
     except Exception:

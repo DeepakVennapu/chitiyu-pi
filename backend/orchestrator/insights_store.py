@@ -3,12 +3,12 @@ Thin persistence layer for insight cards.
 One row per (user_id, scope) — always the most recent generation.
 """
 import sqlite3
-from datetime import datetime, timezone
+from utils.local_time import local_now
 
 
 def store_insights(conn: sqlite3.Connection, user_id: int, scope: str, cards_json: str) -> None:
     """Upsert insight cards for the given scope."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = local_now().isoformat()
     conn.execute(
         """
         INSERT INTO insights (user_id, scope, cards_json, generated_at)

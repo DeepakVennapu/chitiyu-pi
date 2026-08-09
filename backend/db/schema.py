@@ -127,10 +127,41 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             id       INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id  INTEGER NOT NULL DEFAULT 1,
             name     TEXT NOT NULL,
-            type     TEXT NOT NULL CHECK(type IN ('checking','savings','investment','credit')),
+            type     TEXT NOT NULL CHECK(type IN ('checking','savings','investment','credit','brokerage','crypto')),
             currency TEXT NOT NULL DEFAULT 'USD',
             UNIQUE(user_id, name)
         );
+        -- One balance row per account per date. Upsert on (account_id, date).
+        -- is_liability: true for credit cards (balance reduces net worth).
+        CREATE TABLE IF NOT EXISTS account_balances (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER NOT NULL DEFAULT 1,
+            account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+            date       TEXT NOT NULL,
+            balance    REAL NOT NULL,
+            note       TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(account_id, date)
+        );
+        CREATE INDEX IF NOT EXISTS idx_account_balances_user_date
+            ON account_balances(user_id, date);
+        -- Financial milestones: named checkpoints on a rolling timeline.
+        -- target_date + expected_net_worth define the goal line.
+        -- actual_net_worth is filled in when the user logs balances on/after that date.
+        -- period_label groups milestones into cycles (e.g. "2026-H2", "2027-H1").
+        CREATE TABLE IF NOT EXISTS financial_milestones (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id             INTEGER NOT NULL DEFAULT 1,
+            period_label        TEXT NOT NULL,
+            target_date         TEXT NOT NULL,
+            expected_net_worth  REAL NOT NULL,
+            actual_net_worth    REAL,
+            note                TEXT,
+            created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(user_id, target_date)
+        );
+        CREATE INDEX IF NOT EXISTS idx_milestones_user_date
+            ON financial_milestones(user_id, target_date);
         CREATE TABLE IF NOT EXISTS transactions (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id     INTEGER NOT NULL DEFAULT 1,
@@ -147,12 +178,15 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_transactions_user_category
             ON transactions(user_id, category);
         CREATE TABLE IF NOT EXISTS budgets (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id    INTEGER NOT NULL DEFAULT 1,
-            category   TEXT NOT NULL,
-            amount     REAL NOT NULL,
-            period     TEXT NOT NULL DEFAULT 'monthly' CHECK(period IN ('monthly','weekly')),
-            start_date TEXT NOT NULL DEFAULT (date('now')),
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     INTEGER NOT NULL DEFAULT 1,
+            category    TEXT NOT NULL,
+            amount      REAL NOT NULL,
+            period      TEXT NOT NULL DEFAULT 'monthly'
+                        CHECK(period IN ('monthly','weekly','biannual','annual')),
+            budget_type TEXT NOT NULL DEFAULT 'discretionary'
+                        CHECK(budget_type IN ('fixed','recurring','discretionary','envelope')),
+            start_date  TEXT NOT NULL DEFAULT (date('now')),
             UNIQUE(user_id, category, period)
         );
         CREATE TABLE IF NOT EXISTS net_worth (

@@ -91,6 +91,9 @@ export interface HealthMetrics {
 export const getMealsToday = () =>
   request<MealsResponse>("GET", "/health/meals/today");
 
+export const getMealsForDate = (date: string) =>
+  request<MealsResponse>("GET", `/health/summary/${date}`);
+
 // POST /health/meals returns {"result": str} — an NL confirmation string, not a Meal.
 // After logging, reload getMealsToday() to get updated meals + totals.
 export interface LogMealResponse { result: string; }
@@ -160,15 +163,37 @@ export interface CategoryBudget {
   category: string;
   spent: number;
   budget: number | null;
+  budget_type: "fixed" | "recurring" | "discretionary" | "envelope";
+  period: "monthly" | "biannual" | "annual" | "weekly";
   over_budget: boolean;
+  is_excluded: boolean;
+}
+
+export interface Milestone {
+  id: number;
+  period_label: string;
+  target_date: string;
+  expected_net_worth: number;
+  actual_net_worth: number | null;
+  note: string | null;
+  current_balance: number | null;
 }
 
 export interface FinanceSummary {
   year: number;
   month: number;
-  total_spent: number;      // sum of all negative (expense) transactions
-  total_budget: number | null; // sum of all budget rows, null if no budgets set
+  total_spent: number;
+  total_budget: number | null;
+  discretionary_spent: number;
+  discretionary_budget: number;
+  next_milestone: Milestone | null;
   categories: CategoryBudget[];
+  by_type: {
+    fixed: CategoryBudget[];
+    recurring: CategoryBudget[];
+    discretionary: CategoryBudget[];
+    envelope: CategoryBudget[];
+  };
 }
 
 export interface NetWorth {
@@ -195,15 +220,11 @@ export const getTransactions = () =>
 export const logExpense = (text: string, category?: string) =>
   request<Transaction>("POST", "/finance/transactions", { text, ...(category ? { category } : {}) });
 
-export const getNetWorth = () =>
-  request<NetWorth | null>("GET", "/finance/networth").catch((e) => {
-    // 404 means no snapshot recorded yet — treat as null, not an error
-    if (e instanceof Error && e.message.includes("404")) return null;
-    throw e;
-  });
-
 export const getSavingsGoals = () =>
   request<{ goals: SavingsGoal[] }>("GET", "/finance/goals");
+
+export const createGoal = (m: Omit<SavingsGoal, "id" | "current_amount">) =>
+  request<SavingsGoal>("POST", "/finance/goals", m);
 
 export const deleteTransaction = (id: number) =>
   request<{ ok: boolean }>("DELETE", `/finance/transactions/${id}`);
@@ -212,14 +233,86 @@ export interface Budget {
   id: number;
   category: string;
   amount: number;
-  period: string;
+  period: "monthly" | "biannual" | "annual" | "weekly";
+  budget_type: "fixed" | "recurring" | "discretionary" | "envelope";
 }
 
 export const getBudgets = () =>
   request<Budget[]>("GET", "/finance/budgets");
 
 export const setBudget = (category: string, amount: number) =>
-  request<{ id: number; category: string; amount: number }>("POST", "/finance/budgets", { category, amount });
+  request<Budget>("POST", "/finance/budgets", { category, amount });
+
+export const setBudgetWithType = (
+  category: string,
+  amount: number,
+  budget_type: Budget["budget_type"],
+  period: Budget["period"] = "monthly"
+) =>
+  request<Budget>("POST", "/finance/budgets", { category, amount, budget_type, period });
+
+// ─── Accounts ─────────────────────────────────────────────────────────────────
+
+export interface Account {
+  id: number;
+  name: string;
+  type: "checking" | "savings" | "investment" | "credit" | "brokerage" | "crypto";
+  currency: string;
+}
+
+export const getAccounts = () =>
+  request<{ accounts: Account[] }>("GET", "/finance/accounts");
+
+export const createAccount = (name: string, type: Account["type"]) =>
+  request<Account>("POST", "/finance/accounts", { name, type });
+
+// ─── Account Balances ─────────────────────────────────────────────────────────
+
+export interface AccountBalance {
+  id: number;
+  account_id: number;
+  account_name: string;
+  account_type: string;
+  date: string;
+  balance: number;
+  note: string | null;
+}
+
+export interface BalanceEntry {
+  account_id: number;
+  balance: number;
+  note?: string;
+}
+
+export const getLatestBalances = () =>
+  request<{ balances: AccountBalance[]; computed_net_worth: number | null }>(
+    "GET", "/finance/balances/latest"
+  );
+
+export const updateBalances = (balances: BalanceEntry[], date?: string) =>
+  request<{ updated: any[]; computed_net_worth: number | null }>(
+    "POST", "/finance/balances",
+    { balances, ...(date ? { date } : {}) }
+  );
+
+// ─── Financial Milestones ─────────────────────────────────────────────────────
+
+export interface FinancialMilestone {
+  id: number;
+  period_label: string;
+  target_date: string;
+  expected_net_worth: number;
+  actual_net_worth: number | null;
+  note: string | null;
+}
+
+export const getMilestones = (period_label?: string) =>
+  request<{ periods: string[]; milestones: FinancialMilestone[] }>(
+    "GET", `/finance/milestones${period_label ? `?period_label=${period_label}` : ""}`
+  );
+
+export const createMilestone = (m: Omit<FinancialMilestone, "id">) =>
+  request<{ id: number }>("POST", "/finance/milestones", m);
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
 

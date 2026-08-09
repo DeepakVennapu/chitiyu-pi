@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import datetime
+from utils.local_time import local_now
 
 
 def _humanize(due_at: str | None) -> str:
@@ -6,7 +7,7 @@ def _humanize(due_at: str | None) -> str:
         return "no due date"
     try:
         dt = datetime.fromisoformat(due_at.replace("Z", "+00:00"))
-        today = datetime.now(timezone.utc).date()
+        today = local_now().date()
         delta = (dt.date() - today).days
         if delta < 0:
             return f"overdue by {-delta}d"

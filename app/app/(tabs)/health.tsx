@@ -8,12 +8,13 @@ import { ProgressBar } from "../../components/ProgressBar";
 import { MacroRings } from "../../components/MacroRings";
 import { MealRow } from "../../components/MealRow";
 import {
-  getMealsToday, logMeal, getMealPreview,
+  getMealsToday, getMealsForDate, logMeal, getMealPreview,
   logMealFromRecipe, logMealParsed, getRecipes, createRecipe, deleteMeal,
   type Meal, type MealTotals, type HealthMetrics, type MealPreviewResult, type Recipe,
 } from "../../lib/api";
 import { TARGETS } from "../../constants/targets";
 import { useTheme, type Colors } from "../../lib/theme";
+import { parseLocalTs, nowISO, todayLocal, dateToLocal } from "../../lib/dateUtils";
 
 type MealSection = { label: string; meals: Meal[] };
 type LogTab = "describe" | "recipes";
@@ -26,20 +27,8 @@ function defaultMealTime(): MealTime {
   return "dinner";
 }
 
-// SQLite stores logged_at as "YYYY-MM-DD HH:MM:SS" with no timezone marker (UTC).
-// JS parses bare datetime strings as LOCAL time, so we must append Z to force UTC.
-function parseLoggedAt(raw: string | null | undefined): Date | null {
-  if (!raw) return null;
-  const s = raw.includes("Z") || raw.includes("+") ? raw : raw.replace(" ", "T") + "Z";
-  const d = new Date(s);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-// Slot selection only affects which bucket the meal appears under when backdating.
-// For "log now" we send null — backend uses datetime('now') (UTC).
-function mealTimeToISO(_slot: MealTime): string {
-  return new Date().toISOString();
-}
+// SQLite stores logged_at as "YYYY-MM-DD HH:MM:SS" in local time.
+// parseLocalTs (from dateUtils) handles bare strings correctly — no Z appended.
 
 function bucketMeals(meals: Meal[]): MealSection[] {
   const sections: { label: string; hours: [number, number] }[] = [
@@ -51,7 +40,7 @@ function bucketMeals(meals: Meal[]): MealSection[] {
     .map(({ label, hours: [start, end] }) => ({
       label,
       meals: meals.filter((m) => {
-        const d = parseLoggedAt(m.logged_at);
+        const d = parseLocalTs(m.logged_at);
         if (!d) return false;
         const hour = d.getHours();
         return hour >= start && hour < end;
@@ -62,6 +51,7 @@ function bucketMeals(meals: Meal[]): MealSection[] {
 
 export default function HealthScreen() {
   const { colors } = useTheme();
+  const [selectedDate, setSelectedDate] = useState(todayLocal());
   const [meals, setMeals] = useState<Meal[]>([]);
   const [totals, setTotals] = useState<MealTotals>({ calories: 0, protein: 0, fat: 0, carbs: 0 });
   const [metrics, setMetrics] = useState<HealthMetrics | null>(null);
@@ -88,10 +78,12 @@ export default function HealthScreen() {
   const [showSaveRecipe, setShowSaveRecipe] = useState(false);
   const [recipeName, setRecipeName] = useState("");
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (date: string) => {
     setError(null);
     try {
-      const mealsData = await getMealsToday();
+      const mealsData = date === todayLocal()
+        ? await getMealsToday()
+        : await getMealsForDate(date);
       setMeals(mealsData.meals);
       setMetrics(mealsData.metrics);
       // Backend does not return totals — sum client-side
@@ -123,9 +115,33 @@ export default function HealthScreen() {
     }
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { loadData(selectedDate); }, [selectedDate]);
 
-  const handleRefresh = () => { setRefreshing(true); loadData(); };
+  const handleRefresh = () => { setRefreshing(true); loadData(selectedDate); };
+
+  const handlePrevDay = () => {
+    const d = new Date(selectedDate + "T12:00:00");
+    d.setDate(d.getDate() - 1);
+    setSelectedDate(dateToLocal(d));
+  };
+
+  const handleNextDay = () => {
+    const next = new Date(selectedDate + "T12:00:00");
+    next.setDate(next.getDate() + 1);
+    const nextStr = dateToLocal(next);
+    if (nextStr <= todayLocal()) setSelectedDate(nextStr);
+  };
+
+  const isToday = selectedDate === todayLocal();
+
+  const dateLabel = (() => {
+    if (isToday) return "Today";
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (selectedDate === dateToLocal(yesterday)) return "Yesterday";
+    const d = new Date(selectedDate + "T12:00:00");
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  })();
 
   const openSheet = () => {
     setPreview(null);
@@ -160,11 +176,11 @@ export default function HealthScreen() {
     setConfirmedPreview(preview);
     setLogging(true);
     try {
-      await logMealParsed(preview, mealTimeToISO(mealTime));
+      await logMealParsed(preview, nowISO());
       setSheetVisible(false);
       setPreview(null);
       setMealInput("");
-      await loadData();
+      await loadData(selectedDate);
       // Ask to save as recipe
       setShowSaveRecipe(true);
     } finally {
@@ -194,7 +210,7 @@ export default function HealthScreen() {
     try {
       await logMealFromRecipe(recipeId);
       setSheetVisible(false);
-      await loadData();
+      await loadData(selectedDate);
     } finally {
       setLogging(false);
     }
@@ -243,8 +259,19 @@ export default function HealthScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
+        {/* Date nav */}
+        <View style={[styles.dateNav, styles.px]}>
+          <TouchableOpacity onPress={handlePrevDay} style={styles.dateArrow}>
+            <Text style={[styles.dateArrowText, { color: colors.text }]}>‹</Text>
+          </TouchableOpacity>
+          <Text style={[styles.dateLabel, { color: colors.text }]}>{dateLabel}</Text>
+          <TouchableOpacity onPress={handleNextDay} style={styles.dateArrow} disabled={isToday}>
+            <Text style={[styles.dateArrowText, { color: isToday ? colors.textSecondary : colors.text }]}>›</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Macro progress */}
-        <View style={styles.section}>
+        <View style={[styles.section, styles.px]}>
           <ProgressBar label="Calories" value={totals.calories} target={TARGETS.calories} unit=" kcal" color={colors.accentOrange} />
           <ProgressBar label="Protein" value={totals.protein} target={TARGETS.protein} unit="g" color={colors.accentGreen} />
           <ProgressBar label="Fat" value={totals.fat} target={TARGETS.fat} unit="g" color={colors.accentOrange} />
@@ -254,13 +281,13 @@ export default function HealthScreen() {
         <MacroRings totals={totals} />
 
         {metrics?.steps != null && (
-          <View style={styles.section}>
+          <View style={[styles.section, styles.px]}>
             <ProgressBar label="Steps" value={metrics.steps} target={TARGETS.steps} unit="" color={colors.accent} />
           </View>
         )}
 
         {metrics && (metrics.sleep_total_mins != null || metrics.sleep_deep_mins != null || metrics.resting_hr != null) && (
-          <View style={[styles.card, { backgroundColor: colors.card }]}>
+          <View style={[styles.card, styles.mx, { backgroundColor: colors.card }]}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Last Night</Text>
             <View style={styles.metricsRow}>
               <MetricChip label="Deep sleep" value={metrics.sleep_deep_mins != null ? `${metrics.sleep_deep_mins}m` : "—"} target={`/ ${TARGETS.deepSleepMins}m`} ok={metrics.sleep_deep_mins != null ? metrics.sleep_deep_mins >= TARGETS.deepSleepMins : undefined} colors={colors} />
@@ -270,23 +297,23 @@ export default function HealthScreen() {
           </View>
         )}
 
-        {/* Log Meal CTA */}
-        <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.accent }]} onPress={openSheet}>
-          <Text style={styles.primaryButtonText}>+ Log Meal</Text>
-        </TouchableOpacity>
+        {/* Log Meal CTA — only on today */}
+        {isToday && (
+          <TouchableOpacity style={[styles.primaryButton, styles.mx, { backgroundColor: colors.accent }]} onPress={openSheet}>
+            <Text style={styles.primaryButtonText}>+ Log Meal</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Today's meals by section */}
         {meals.length === 0 ? (
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No meals logged yet.</Text>
+          <Text style={[styles.emptyText, styles.px, { color: colors.textSecondary }]}>No meals logged yet.</Text>
         ) : (
           mealSections.map((section) => (
             <View key={section.label} style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>{section.label}</Text>
-              <View style={[styles.mealGroup, { borderColor: colors.border }]}>
-                {section.meals.map((meal) => (
-                  <MealRow key={meal.id} meal={meal} onDelete={handleDeleteMeal} colors={colors} />
-                ))}
-              </View>
+              <Text style={[styles.sectionTitle, styles.px, { color: colors.text }]}>{section.label}</Text>
+              {section.meals.map((meal) => (
+                <MealRow key={meal.id} meal={meal} onDelete={handleDeleteMeal} />
+              ))}
             </View>
           ))
         )}
@@ -482,14 +509,19 @@ const chipStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  content: { padding: 16, paddingBottom: 40 },
+  content: { paddingTop: 16, paddingBottom: 40 },
+  px: { paddingHorizontal: 16 },
+  mx: { marginHorizontal: 16 },
+  dateNav: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 20 },
+  dateArrow: { paddingHorizontal: 20, paddingVertical: 4 },
+  dateArrowText: { fontSize: 28, fontWeight: "300", lineHeight: 32 },
+  dateLabel: { fontSize: 16, fontWeight: "600", minWidth: 100, textAlign: "center" },
   section: { marginBottom: 20 },
   card: { borderRadius: 12, padding: 16, marginBottom: 20 },
   sectionTitle: { fontSize: 15, fontWeight: "600", marginBottom: 8 },
   metricsRow: { flexDirection: "row", justifyContent: "space-around" },
   primaryButton: { borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 24 },
   primaryButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  mealGroup: { borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, overflow: "hidden" },
   emptyText: { fontSize: 14 },
   // Modal
   modalOverlay: { flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" },

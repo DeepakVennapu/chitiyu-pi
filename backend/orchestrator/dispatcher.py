@@ -1,6 +1,6 @@
 # backend/orchestrator/dispatcher.py
 import json, logging, sqlite3
-from datetime import datetime, timezone
+from utils.local_time import local_now
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ async def dispatch_pending(conn: sqlite3.Connection, bot) -> None:
             await bot.send_message(chat_id=payload.get("chat_id", 0), text=text)
             conn.execute(
                 "UPDATE notification_events SET delivered_at=? WHERE id=?",
-                (datetime.now(timezone.utc).isoformat(), row["id"])
+                (local_now().isoformat(), row["id"])
             )
             conn.commit()
         except Exception as e:

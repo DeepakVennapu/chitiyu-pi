@@ -1,0 +1,18 @@
+INFO:     Started server process [16082]
+INFO:     Waiting for application startup.
+INFO:apscheduler.scheduler:Adding job tentatively -- it will be properly scheduled when the scheduler starts
+INFO:apscheduler.scheduler:Adding job tentatively -- it will be properly scheduled when the scheduler starts
+INFO:apscheduler.scheduler:Adding job tentatively -- it will be properly scheduled when the scheduler starts
+INFO:apscheduler.scheduler:Adding job tentatively -- it will be properly scheduled when the scheduler starts
+INFO:apscheduler.scheduler:Adding job tentatively -- it will be properly scheduled when the scheduler starts
+INFO:apscheduler.scheduler:Added job "_morning_digest" to job store "default"
+INFO:apscheduler.scheduler:Added job "_meal_nudge" to job store "default"
+INFO:apscheduler.scheduler:Added job "_midday_nudge" to job store "default"
+INFO:apscheduler.scheduler:Added job "_evening_prompt" to job store "default"
+INFO:apscheduler.scheduler:Added job "_evening_followup" to job store "default"
+INFO:apscheduler.scheduler:Scheduler started
+INFO:     Application startup complete.
+ERROR:    [Errno 48] error while attempting to bind on address ('0.0.0.0', 8000): address already in use
+INFO:     Waiting for application shutdown.
+INFO:apscheduler.scheduler:Scheduler has been shut down
+INFO:     Application shutdown complete.

@@ -9,6 +9,7 @@ from domains.health.db import (get_today_meals, get_meals_for_date, get_metrics_
                                log_meal_from_recipe)
 from domains.health.formatter import format_today_summary
 from datetime import datetime, timezone
+from domains.health.db import _today_local
 
 router = APIRouter(prefix="/health", tags=["health"],
                    dependencies=[Depends(verify_api_key)])
@@ -79,7 +80,7 @@ def log_meal_endpoint(body: MealLog):
 def meals_today(user_id: int = 1):
     conn = _conn()
     meals = [dict(m) for m in get_today_meals(conn, user_id)]
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = _today_local()
     metrics = get_metrics_for_date(conn, user_id, today)
     conn.close()
     return {"meals": meals, "metrics": metrics,
@@ -147,7 +148,7 @@ def health_sync(body: HealthSync):
 
 @router.get("/metrics/today")
 def metrics_today(user_id: int = 1):
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = _today_local()
     conn = _conn()
     m = get_metrics_for_date(conn, user_id, today)
     conn.close()

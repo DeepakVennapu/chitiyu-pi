@@ -21,12 +21,12 @@ export default function InsightsScreen() {
   const [activeScope, setActiveScope] = useState<Scope>("today");
   const [error, setError] = useState<string | null>(null);
 
-  const loadInsights = useCallback(async () => {
+  const loadInsights = useCallback(async (resetDismissed = false) => {
     setError(null);
     try {
       const data = await getInsightsLatest(activeScope);
       setInsights(data.cards);
-      setDismissed(new Set()); // reset dismissed on reload
+      if (resetDismissed) setDismissed(new Set());
     } catch (e) {
       if (e instanceof Error && e.message.includes("404")) {
         setInsights([]);
@@ -58,7 +58,7 @@ export default function InsightsScreen() {
           if (data.cards.length > 0) break;
         } catch { /* 404 = not ready */ }
       }
-      if (data) { setInsights(data.cards); setDismissed(new Set()); }
+      if (data) { setInsights(data.cards); setDismissed(new Set()); } // intentionally reset on new generation
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to generate insights");
     } finally {
@@ -78,7 +78,7 @@ export default function InsightsScreen() {
       <ScrollView
         style={s.scroll}
         contentContainerStyle={s.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadInsights} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadInsights(false)} />}
       >
         <View style={s.header}>
           <View>

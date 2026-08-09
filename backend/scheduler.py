@@ -48,7 +48,8 @@ def _meal_nudge() -> None:
         from db.connection import get_connection
         from db.schema import initialize_schema
         from domains.health.db import get_today_meals
-        from datetime import datetime, timezone, timedelta
+        from datetime import timedelta
+        from utils.local_time import local_now, to_local_ts
         conn = get_connection(DB_PATH)
         initialize_schema(conn)
         meals = get_today_meals(conn, 1)
@@ -56,10 +57,11 @@ def _meal_nudge() -> None:
         if not meals:
             _flush_event("health", "meal_nudge", "Did you eat anything? Log your last meal.")
             return
-        last_meal_time = datetime.fromisoformat(meals[-1]["logged_at"].replace("Z", "+00:00"))
-        if last_meal_time.tzinfo is None:
-            last_meal_time = last_meal_time.replace(tzinfo=timezone.utc)
-        if datetime.now(timezone.utc) - last_meal_time > timedelta(hours=1):
+        # logged_at is stored as bare local "YYYY-MM-DD HH:MM:SS" — parse as local
+        from datetime import datetime
+        raw_ts = meals[-1]["logged_at"].replace(" ", "T")
+        last_meal_time = datetime.fromisoformat(raw_ts).astimezone()
+        if local_now() - last_meal_time > timedelta(hours=1):
             _flush_event("health", "meal_nudge", "No meal logged in the past hour. Did you eat?")
     except Exception:
         logger.exception("meal nudge failed")
@@ -86,11 +88,10 @@ def _evening_prompt() -> None:
         from db.connection import get_connection
         from db.schema import initialize_schema
         from domains.journal.db import get_entry
-        from datetime import datetime
-        from zoneinfo import ZoneInfo
+        from utils.local_time import today_local
         conn = get_connection(DB_PATH)
         initialize_schema(conn)
-        today = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+        today = today_local()
         existing = get_entry(conn, 1, today)
         if not existing:
             conn.execute(
@@ -110,11 +111,10 @@ def _evening_followup() -> None:
         from db.connection import get_connection
         from db.schema import initialize_schema
         from domains.journal.db import get_entry
-        from datetime import datetime
-        from zoneinfo import ZoneInfo
+        from utils.local_time import today_local
         conn = get_connection(DB_PATH)
         initialize_schema(conn)
-        today = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+        today = today_local()
         existing = get_entry(conn, 1, today)
         conn.close()
         if not existing:
@@ -124,7 +124,9 @@ def _evening_followup() -> None:
 
 
 def build_scheduler() -> BackgroundScheduler:
-    sched = BackgroundScheduler(timezone="America/New_York")
+    import datetime as _dt
+    _local_tz = _dt.datetime.now().astimezone().tzinfo
+    sched = BackgroundScheduler(timezone=_local_tz)
     sched.add_job(_morning_digest,   CronTrigger(hour=8,        minute=0),  id="morning_digest")
     sched.add_job(_meal_nudge,       CronTrigger(hour="9-22",   minute=0),  id="meal_nudge")
     sched.add_job(_midday_nudge,     CronTrigger(hour=16,       minute=0),  id="midday_nudge")

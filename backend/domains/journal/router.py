@@ -25,9 +25,9 @@ class EntryCreate(BaseModel):
 
 @router.post("/entry")
 def save(body: EntryCreate):
-    from datetime import datetime, timezone
+    from utils.local_time import today_local
     conn = _conn()
-    date = datetime.now(timezone.utc).date().isoformat()
+    date = today_local()
     upsert_entry(conn, body.user_id, date, body.raw_text, body.summary, body.retro_json)
     conn.close()
     return {"ok": True, "date": date}

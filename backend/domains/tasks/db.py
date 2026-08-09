@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime, timezone
+from utils.local_time import local_now, today_local
 
 
 def insert_task(conn: sqlite3.Connection, user_id: int, title: str, due_at: str | None = None) -> int:
@@ -19,7 +19,7 @@ def get_pending_tasks(conn: sqlite3.Connection, user_id: int) -> list:
 
 
 def get_overdue_tasks(conn: sqlite3.Connection, user_id: int) -> list:
-    now = datetime.now(timezone.utc).isoformat()
+    now = local_now().isoformat()
     return conn.execute(
         "SELECT * FROM tasks WHERE user_id=? AND completed_at IS NULL AND due_at < ?",
         (user_id, now)
@@ -27,7 +27,7 @@ def get_overdue_tasks(conn: sqlite3.Connection, user_id: int) -> list:
 
 
 def get_today_tasks(conn: sqlite3.Connection, user_id: int) -> list:
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = today_local()
     return conn.execute(
         "SELECT * FROM tasks WHERE user_id=? AND completed_at IS NULL "
         "AND date(due_at) = ?",
@@ -35,8 +35,16 @@ def get_today_tasks(conn: sqlite3.Connection, user_id: int) -> list:
     ).fetchall()
 
 
+def get_tasks_by_date(conn: sqlite3.Connection, user_id: int, date_iso: str) -> list:
+    return conn.execute(
+        "SELECT * FROM tasks WHERE user_id=? AND completed_at IS NULL "
+        "AND date(due_at) = ?",
+        (user_id, date_iso)
+    ).fetchall()
+
+
 def complete_task(conn: sqlite3.Connection, user_id: int, task_id: int) -> bool:
-    now = datetime.now(timezone.utc).isoformat()
+    now = local_now().isoformat()
     cur = conn.execute(
         "UPDATE tasks SET completed_at=? WHERE id=? AND user_id=? AND completed_at IS NULL",
         (now, task_id, user_id)

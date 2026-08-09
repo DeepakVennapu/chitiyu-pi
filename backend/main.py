@@ -12,6 +12,7 @@ from domains.finance.router import router as finance_router
 from integrations.ha.router import router as ha_router
 from integrations.calendar_router import router as calendar_router
 from integrations.siri.router import router as siri_router
+from integrations.health_auto_export_router import router as hae_router
 from orchestrator.insights_router import router as insights_router
 
 logging.basicConfig(level=logging.INFO)
@@ -39,6 +40,7 @@ app.include_router(finance_router)
 app.include_router(ha_router)
 app.include_router(calendar_router)
 app.include_router(siri_router)
+app.include_router(hae_router)
 app.include_router(insights_router)
 
 

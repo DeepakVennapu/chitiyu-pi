@@ -6,7 +6,7 @@ from db.schema import initialize_schema
 from config import DB_PATH
 from domains.tasks.db import (
     insert_task, get_pending_tasks, get_overdue_tasks,
-    get_today_tasks, complete_task, delete_task
+    get_today_tasks, get_tasks_by_date, complete_task, delete_task
 )
 from domains.tasks.formatter import format_task_list
 
@@ -55,6 +55,14 @@ def overdue(user_id: int = 1):
 def today(user_id: int = 1):
     conn = _conn()
     tasks = [dict(t) for t in get_today_tasks(conn, user_id)]
+    conn.close()
+    return tasks
+
+
+@router.get("/by-date")
+def by_date(date: str, user_id: int = 1):
+    conn = _conn()
+    tasks = [dict(t) for t in get_tasks_by_date(conn, user_id, date)]
     conn.close()
     return tasks
 

@@ -1,7 +1,7 @@
 # backend/domains/finance/router.py
 import json
-from datetime import datetime, timezone
 from typing import Any
+from utils.local_time import today_local
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
@@ -11,17 +11,30 @@ from config import DB_PATH
 from db.connection import get_connection
 from db.schema import initialize_schema
 from domains.finance.db import (
+    compute_net_worth_from_balances,
     delete_transaction,
+    get_account_by_name,
+    get_discretionary_total,
+    get_latest_balances,
     get_latest_net_worth,
+    get_next_milestone,
+    insert_account,
     insert_net_worth,
     insert_savings_goal,
     insert_transaction,
+    list_accounts,
+    list_balance_history,
     list_budgets,
+    list_milestone_periods,
+    list_milestones,
     list_net_worth_snapshots,
     list_savings_goals,
     list_transactions,
+    update_milestone_actual,
     update_savings_goal_progress,
+    upsert_account_balance,
     upsert_budget,
+    upsert_milestone,
     get_monthly_spend,
     get_budget,
 )
@@ -29,6 +42,8 @@ from domains.finance.formatter import format_budget_summary
 
 router = APIRouter(prefix="/finance", tags=["finance"],
                    dependencies=[Depends(verify_api_key)])
+
+EXCLUDED_FROM_TOTAL = {"income", "savings"}
 
 
 def _conn():
@@ -38,6 +53,38 @@ def _conn():
 
 
 # ── Pydantic models ────────────────────────────────────────────────────────────
+
+class AccountCreate(BaseModel):
+    user_id: int = 1
+    name: str
+    type: str
+    currency: str = "USD"
+
+
+class BalanceEntry(BaseModel):
+    account_id: int
+    balance: float
+    note: str | None = None
+
+
+class BulkBalanceUpdate(BaseModel):
+    user_id: int = 1
+    date: str | None = None   # ISO YYYY-MM-DD; defaults to today
+    balances: list[BalanceEntry]
+
+
+class MilestoneCreate(BaseModel):
+    user_id: int = 1
+    period_label: str          # e.g. "2026-H2", "2027-H1"
+    target_date: str           # ISO YYYY-MM-DD
+    expected_net_worth: float
+    actual_net_worth: float | None = None
+    note: str | None = None
+
+
+class MilestoneActualUpdate(BaseModel):
+    actual_net_worth: float
+
 
 class TransactionCreate(BaseModel):
     user_id: int = 1
@@ -56,6 +103,7 @@ class BudgetCreate(BaseModel):
     category: str
     amount: float
     period: str = "monthly"
+    budget_type: str = "discretionary"
 
 
 class NetWorthCreate(BaseModel):
@@ -75,6 +123,112 @@ class GoalCreate(BaseModel):
 
 class GoalProgressUpdate(BaseModel):
     current_amount: float
+
+
+# ── Accounts ──────────────────────────────────────────────────────────────────
+
+@router.get("/accounts")
+def get_accounts(user_id: int = 1):
+    conn = _conn()
+    try:
+        return {"accounts": list_accounts(conn, user_id)}
+    finally:
+        conn.close()
+
+
+@router.post("/accounts")
+def create_account(body: AccountCreate):
+    conn = _conn()
+    try:
+        aid = insert_account(conn, body.user_id, body.name, body.type, body.currency)
+        return {"id": aid, "name": body.name, "type": body.type, "currency": body.currency}
+    finally:
+        conn.close()
+
+
+# ── Account Balances ──────────────────────────────────────────────────────────
+
+@router.get("/balances/latest")
+def get_latest_account_balances(user_id: int = 1):
+    conn = _conn()
+    try:
+        rows = get_latest_balances(conn, user_id)
+        net_worth = compute_net_worth_from_balances(conn, user_id)
+        return {"balances": rows, "computed_net_worth": net_worth}
+    finally:
+        conn.close()
+
+
+@router.get("/balances/history")
+def get_balance_history(user_id: int = 1, account_id: int | None = None, limit: int = 60):
+    conn = _conn()
+    try:
+        return {"history": list_balance_history(conn, user_id, account_id, limit)}
+    finally:
+        conn.close()
+
+
+@router.post("/balances")
+def update_balances(body: BulkBalanceUpdate):
+    """Bulk-upsert balances for multiple accounts on a single date."""
+    from datetime import date as _date
+    conn = _conn()
+    try:
+        date = body.date or _date.today().isoformat()
+        results = []
+        for entry in body.balances:
+            bid = upsert_account_balance(
+                conn, body.user_id, entry.account_id, date, entry.balance, entry.note
+            )
+            results.append({"id": bid, "account_id": entry.account_id,
+                            "date": date, "balance": entry.balance})
+        net_worth = compute_net_worth_from_balances(conn, body.user_id)
+        # Auto-snapshot net worth so existing net_worth history still works
+        if net_worth is not None:
+            insert_net_worth(conn, body.user_id, date, {}, {}, net_worth)
+        return {"updated": results, "computed_net_worth": net_worth}
+    finally:
+        conn.close()
+
+
+# ── Financial Milestones ──────────────────────────────────────────────────────
+
+@router.get("/milestones")
+def get_milestones(user_id: int = 1, period_label: str | None = None):
+    conn = _conn()
+    try:
+        periods = list_milestone_periods(conn, user_id)
+        milestones = list_milestones(conn, user_id, period_label)
+        return {"periods": periods, "milestones": milestones}
+    finally:
+        conn.close()
+
+
+@router.post("/milestones")
+def create_milestone(body: MilestoneCreate):
+    conn = _conn()
+    try:
+        mid = upsert_milestone(
+            conn, body.user_id, body.period_label, body.target_date,
+            body.expected_net_worth, body.actual_net_worth, body.note
+        )
+        return {"id": mid, "period_label": body.period_label,
+                "target_date": body.target_date,
+                "expected_net_worth": body.expected_net_worth}
+    finally:
+        conn.close()
+
+
+@router.patch("/milestones/{target_date}")
+def patch_milestone_actual(target_date: str, body: MilestoneActualUpdate, user_id: int = 1):
+    conn = _conn()
+    try:
+        ok = update_milestone_actual(conn, user_id, target_date, body.actual_net_worth)
+        if not ok:
+            raise HTTPException(404, "Milestone not found")
+        return {"target_date": target_date, "actual_net_worth": body.actual_net_worth}
+    finally:
+        conn.close()
 
 
 # ── Transactions ───────────────────────────────────────────────────────────────
@@ -119,11 +273,12 @@ def log_transaction(body: TransactionCreate):
 
 @router.get("/transactions")
 def get_transactions(user_id: int = 1, date_from: str | None = None,
-                     date_to: str | None = None, category: str | None = None):
+                     date_to: str | None = None, category: str | None = None,
+                     limit: int = 50):
     conn = _conn()
     try:
         txns = list_transactions(conn, user_id, date_from=date_from,
-                                 date_to=date_to, category=category)
+                                 date_to=date_to, category=category, limit=limit)
         return {"transactions": txns}
     finally:
         conn.close()
@@ -173,29 +328,55 @@ def budget_summary(year: int, month: int, user_id: int = 1):
     try:
         spend = get_monthly_spend(conn, user_id, year, month)
         budgets = list_budgets(conn, user_id)
-        budget_map = {b["category"]: b["amount"] for b in budgets}
+        disc_spent, disc_budget = get_discretionary_total(conn, user_id, year, month)
+        next_ms = get_next_milestone(conn, user_id)
 
-        total_spent = sum(spend.values())
-        total_budget = sum(budget_map.values()) if budget_map else None
+        budget_map: dict[str, dict] = {b["category"]: b for b in budgets}
 
-        categories = []
+        by_type: dict[str, list] = {
+            "fixed": [], "recurring": [], "discretionary": [], "envelope": []
+        }
+
         all_cats = sorted(set(list(spend.keys()) + list(budget_map.keys())))
+        categories = []
         for cat in all_cats:
-            spent = spend.get(cat, 0.0)
-            limit = budget_map.get(cat)
-            categories.append({
+            spent_val = spend.get(cat, 0.0)
+            b = budget_map.get(cat)
+            limit = b["amount"] if b else None
+            btype = b["budget_type"] if b else "discretionary"
+            period = b["period"] if b else "monthly"
+            is_excluded = cat.lower() in EXCLUDED_FROM_TOTAL
+            entry = {
                 "category": cat,
-                "spent": round(spent, 2),
+                "spent": round(spent_val, 2),
                 "budget": round(limit, 2) if limit is not None else None,
-                "over_budget": limit is not None and spent > limit,
-            })
+                "budget_type": btype,
+                "period": period,
+                "over_budget": limit is not None and spent_val > limit and not is_excluded,
+                "is_excluded": is_excluded,
+            }
+            categories.append(entry)
+            if btype in by_type and not is_excluded:
+                by_type[btype].append(entry)
+
+        total_spent = sum(v for k, v in spend.items() if k.lower() not in EXCLUDED_FROM_TOTAL)
+        total_budget = sum(
+            b["amount"] for b in budgets
+            if b["category"].lower() not in EXCLUDED_FROM_TOTAL
+            and b["budget_type"] != "envelope"
+            and b["period"] == "monthly"
+        ) or None
 
         return {
             "year": year,
             "month": month,
             "total_spent": round(total_spent, 2),
-            "total_budget": round(total_budget, 2) if total_budget is not None else None,
+            "total_budget": round(total_budget, 2) if total_budget else None,
+            "discretionary_spent": disc_spent,
+            "discretionary_budget": disc_budget,
+            "next_milestone": next_ms,
             "categories": categories,
+            "by_type": by_type,
         }
     finally:
         conn.close()
@@ -216,10 +397,12 @@ def get_budgets(user_id: int = 1):
 def create_budget(body: BudgetCreate):
     conn = _conn()
     try:
-        from domains.finance.db import upsert_budget
-        bid = upsert_budget(conn, body.user_id, body.category, body.amount, body.period)
+        body.category = body.category.lower().strip()
+        bid = upsert_budget(conn, body.user_id, body.category,
+                            body.amount, body.period, body.budget_type)
         return {"id": bid, "category": body.category,
-                "amount": body.amount, "period": body.period}
+                "amount": body.amount, "period": body.period,
+                "budget_type": body.budget_type}
     finally:
         conn.close()
 
@@ -242,7 +425,7 @@ def get_networth(user_id: int = 1):
 def record_networth(body: NetWorthCreate):
     conn = _conn()
     try:
-        date = body.snapshot_date or datetime.now(timezone.utc).date().isoformat()
+        date = body.snapshot_date or today_local()
         total = body.total
         if total is None:
             total = sum(body.assets_json.values()) - sum(body.liabilities_json.values())

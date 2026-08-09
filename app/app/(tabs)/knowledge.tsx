@@ -37,6 +37,7 @@ export default function KnowledgeScreen() {
   const [sheetVisible, setSheetVisible] = useState(false);
   const [factInput, setFactInput] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const loadEntities = useCallback(async () => {
     setError(null);
@@ -81,12 +82,15 @@ export default function KnowledgeScreen() {
   const handleSaveFact = async () => {
     if (!factInput.trim()) return;
     setSaving(true);
+    setSaveError(null);
     try {
       // POST /knowledge/facts returns {"result": str} — NL confirmation only.
       await saveFact(factInput.trim());
       setFactInput("");
       setSheetVisible(false);
       loadEntities();
+    } catch (e: any) {
+      setSaveError(e?.message ?? "Failed to save fact. Check backend connection.");
     } finally {
       setSaving(false);
     }
@@ -189,7 +193,7 @@ export default function KnowledgeScreen() {
         visible={sheetVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setSheetVisible(false)}
+        onRequestClose={() => { setSheetVisible(false); setSaveError(null); }}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -197,10 +201,13 @@ export default function KnowledgeScreen() {
         >
           <View style={[styles.modalSheet, { backgroundColor: colors.card }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>Save a Fact</Text>
+            {saveError && (
+              <Text style={[styles.errorText, { color: colors.accentRed }]}>{saveError}</Text>
+            )}
             <TextInput
               style={[styles.textInput, { backgroundColor: colors.inputBg, color: colors.text }]}
               value={factInput}
-              onChangeText={setFactInput}
+              onChangeText={(t) => { setFactInput(t); setSaveError(null); }}
               placeholder="e.g. Mom's birthday is March 15. She lives in Austin."
               placeholderTextColor={colors.textTertiary}
               multiline
@@ -213,7 +220,7 @@ export default function KnowledgeScreen() {
             >
               {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Save Fact</Text>}
             </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => setSheetVisible(false)}>
+            <TouchableOpacity style={styles.cancelButton} onPress={() => { setSheetVisible(false); setSaveError(null); }}>
               <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
@@ -291,4 +298,5 @@ const styles = StyleSheet.create({
   submitText: { color: "#fff", fontSize: 16, fontWeight: "600" },
   cancelButton: { alignItems: "center", paddingVertical: 10 },
   cancelText: { fontSize: 15 },
+  errorText: { fontSize: 13, marginBottom: 10, textAlign: "center" },
 });

@@ -152,3 +152,31 @@ def siri_macros(
     )
     spoken = call_claude(prompt, SPOKEN_SYSTEM, DISPATCH_MODEL, timeout=15.0)
     return {"spoken": spoken, "totals": totals_text}
+
+
+# ---------------------------------------------------------------------------
+# POST /siri/sync-health
+# ---------------------------------------------------------------------------
+
+class HealthSyncRequest(BaseModel):
+    date: str                       # YYYY-MM-DD — yesterday for sleep, today for steps
+    steps: int | None = None
+    sleep_deep_mins: int | None = None
+    sleep_total_mins: int | None = None
+    resting_hr: int | None = None
+    user_id: int = 1
+
+
+@router.post("/sync-health")
+def siri_sync_health(
+    req: HealthSyncRequest,
+    _: None = Depends(verify_api_key),
+    conn: sqlite3.Connection = Depends(_get_conn),
+) -> dict:
+    """Receive health metrics from an iOS Shortcut and persist them."""
+    from domains.health.db import upsert_health_metrics
+    upsert_health_metrics(
+        conn, req.user_id, req.date,
+        req.steps, req.sleep_deep_mins, req.sleep_total_mins, req.resting_hr,
+    )
+    return {"ok": True, "date": req.date}
