@@ -22,9 +22,20 @@ import auth
 auth.API_KEY = "test"
 
 
+class _NoCloseConn:
+    """Proxy that suppresses conn.close() so the shared in-memory test DB survives router requests."""
+    def __init__(self, conn):
+        self._conn = conn
+    def close(self):
+        pass
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
 @pytest.fixture
 def client(conn):
-    with patch("orchestrator.chat_router._conn", return_value=conn):
+    proxy = _NoCloseConn(conn)
+    with patch("orchestrator.chat_router._conn", return_value=proxy):
         yield TestClient(main.app)
 
 
@@ -88,7 +99,8 @@ def test_build_chat_response_meal(conn):
         "actions": [],
     })
     macro_json = json.dumps({"description": "chicken mozzarella", "calories": 680, "protein": 45.0, "fat": 22.0, "carbs": 30.0})
-    with patch("orchestrator.chat.call_claude", side_effect=[intent_json, macro_json]):
+    with patch("orchestrator.chat.call_claude", return_value=intent_json), \
+         patch("domains.health.tools.call_claude", return_value=macro_json):
         result = build_chat_response(conn, 1, "I had chicken mozzarella")
     assert len(result["domains"]) == 1
     assert result["domains"][0]["domain"] == "health"
@@ -106,7 +118,8 @@ def test_build_chat_response_finance(conn):
         "actions": [],
     })
     txn_json = json.dumps({"description": "Cheesecake Factory", "amount": -50.0, "category": "dining", "date": "2026-08-08"})
-    with patch("orchestrator.chat.call_claude", side_effect=[intent_json, txn_json]):
+    with patch("orchestrator.chat.call_claude", return_value=intent_json), \
+         patch("domains.finance.tools.call_claude", return_value=txn_json):
         result = build_chat_response(conn, 1, "Spent $50 at Cheesecake Factory")
     assert len(result["domains"]) == 1
     assert result["domains"][0]["domain"] == "finance"
@@ -117,12 +130,11 @@ def test_build_chat_response_finance(conn):
 
 def test_chat_confirm_health(client, conn):
     from domains.health.db import get_today_meals
-    with patch("orchestrator.chat_router._conn", return_value=conn):
-        resp = client.post("/chat/confirm", json={
-            "domain": "health",
-            "preview": {"description": "eggs", "calories": 150, "protein": 12.0, "fat": 10.0, "carbs": 1.0},
-            "user_id": 1,
-        }, headers={"X-API-Key": "test"})
+    resp = client.post("/chat/confirm", json={
+        "domain": "health",
+        "preview": {"description": "eggs", "calories": 150, "protein": 12.0, "fat": 10.0, "carbs": 1.0},
+        "user_id": 1,
+    }, headers={"X-API-Key": "test"})
     assert resp.status_code == 200
     assert resp.json()["ok"] is True
     meals = get_today_meals(conn, 1)
@@ -132,27 +144,25 @@ def test_chat_confirm_health(client, conn):
 
 def test_chat_confirm_tasks(client, conn):
     from domains.tasks.db import get_pending_tasks
-    with patch("orchestrator.chat_router._conn", return_value=conn):
-        resp = client.post("/chat/confirm", json={
-            "domain": "tasks",
-            "preview": [
-                {"title": "Buy chicken", "due_at": "2026-08-09T00:00:00", "priority": 0, "is_recurring": False},
-                {"title": "Buy onions", "due_at": "2026-08-09T00:00:00", "priority": 0, "is_recurring": False},
-            ],
-            "user_id": 1,
-        }, headers={"X-API-Key": "test"})
+    resp = client.post("/chat/confirm", json={
+        "domain": "tasks",
+        "preview": [
+            {"title": "Buy chicken", "due_at": "2026-08-09T00:00:00", "priority": 0, "is_recurring": False},
+            {"title": "Buy onions", "due_at": "2026-08-09T00:00:00", "priority": 0, "is_recurring": False},
+        ],
+        "user_id": 1,
+    }, headers={"X-API-Key": "test"})
     assert resp.status_code == 200
     assert len(get_pending_tasks(conn, 1)) == 2
 
 
 def test_chat_confirm_finance(client, conn):
     from domains.finance.db import list_transactions
-    with patch("orchestrator.chat_router._conn", return_value=conn):
-        resp = client.post("/chat/confirm", json={
-            "domain": "finance",
-            "preview": {"description": "Cheesecake Factory", "amount": -50.0, "category": "dining", "date": "2026-08-08"},
-            "user_id": 1,
-        }, headers={"X-API-Key": "test"})
+    resp = client.post("/chat/confirm", json={
+        "domain": "finance",
+        "preview": {"description": "Cheesecake Factory", "amount": -50.0, "category": "dining", "date": "2026-08-08"},
+        "user_id": 1,
+    }, headers={"X-API-Key": "test"})
     assert resp.status_code == 200
     txns = list_transactions(conn, 1)
     assert len(txns) == 1

@@ -92,17 +92,8 @@ def build_chat_response(
     health_extract = intent.get("health_extract")
     if health_extract:
         try:
-            _MACRO_PROMPT = (
-                '{{"description": "<clean name>", "calories": <int>, "protein": <float>,'
-                ' "fat": <float>, "carbs": <float>}}\nMeal: {text}'
-            )
-            macro_raw = call_claude(
-                f'{{"description": "<clean name>", "calories": <int>, "protein": <float>,'
-                f' "fat": <float>, "carbs": <float>}}\nMeal: {health_extract}',
-                model=DISPATCH_MODEL,
-                timeout=20,
-            )
-            preview = _extract_json(macro_raw)
+            from domains.health.tools import parse_meal_macros
+            preview = parse_meal_macros(health_extract)
             if preview:
                 domains.append({"domain": "health", "preview": preview, "extract": health_extract})
         except Exception as exc:
@@ -111,12 +102,8 @@ def build_chat_response(
     finance_extract = intent.get("finance_extract")
     if finance_extract:
         try:
-            _TXN_PROMPT = (
-                '{{"date": "<YYYY-MM-DD>", "amount": <float>, "category": "<str>", "description": "<str>"}}\n'
-                f'Today: {today}\nInput: {finance_extract}'
-            )
-            txn_raw = call_claude(_TXN_PROMPT, model=DISPATCH_MODEL, timeout=20)
-            preview = _extract_json(txn_raw)
+            from domains.finance.tools import parse_transaction_input
+            preview = parse_transaction_input(finance_extract)
             if preview:
                 domains.append({"domain": "finance", "preview": preview, "extract": finance_extract})
         except Exception as exc:
