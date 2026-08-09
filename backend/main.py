@@ -14,6 +14,7 @@ from integrations.calendar_router import router as calendar_router
 from integrations.siri.router import router as siri_router
 from integrations.health_auto_export_router import router as hae_router
 from orchestrator.insights_router import router as insights_router
+from orchestrator.chat_router import router as chat_router
 
 logging.basicConfig(level=logging.INFO)
 
@@ -42,6 +43,7 @@ app.include_router(calendar_router)
 app.include_router(siri_router)
 app.include_router(hae_router)
 app.include_router(insights_router)
+app.include_router(chat_router)
 
 
 @app.get("/health")
