@@ -44,7 +44,10 @@ def client(monkeypatch):
 
 
 def test_create_task_with_priority(client):
-    r = client.post("/tasks/", json={"title": "Urgent thing", "priority": 2})
+    import json
+    payload = [{"title": "Urgent thing", "due_at": None, "priority": 2, "recurrence": None, "anchor_date": None}]
+    with patch("domains.tasks.tools.call_claude", return_value=json.dumps(payload)):
+        r = client.post("/tasks/", json={"title": "Urgent thing", "priority": 2})
     assert r.status_code == 200
     assert r.json()["priority"] == 2
 
@@ -56,7 +59,10 @@ def test_dates_summary_empty(client):
 
 
 def test_dates_summary_with_task(client):
-    client.post("/tasks/", json={"title": "Thing", "due_at": "2026-08-10T00:00:00", "priority": 1})
+    import json
+    payload = [{"title": "Thing", "due_at": "2026-08-10T00:00:00", "priority": 1, "recurrence": None, "anchor_date": None}]
+    with patch("domains.tasks.tools.call_claude", return_value=json.dumps(payload)):
+        client.post("/tasks/", json={"title": "Thing", "due_at": "2026-08-10T00:00:00", "priority": 1})
     r = client.get("/tasks/dates-summary?start=2026-08-01&end=2026-08-31")
     assert r.json() == {"2026-08-10": 1}
 

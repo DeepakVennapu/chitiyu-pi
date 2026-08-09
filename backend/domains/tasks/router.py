@@ -42,12 +42,15 @@ class TemplateCreate(BaseModel):
 
 @router.post("/")
 def create(body: TaskCreate):
+    from domains.tasks.tools import create_tasks_from_input
     conn = _conn()
-    task_id = insert_task(conn, body.user_id, body.title, body.due_at, body.priority)
+    created = create_tasks_from_input(conn, body.user_id, body.title)
     conn.close()
-    return _with_uid({"id": task_id, "title": body.title, "due_at": body.due_at,
-                      "completed_at": None, "priority": body.priority, "tags": [],
-                      "is_recurring": False})
+    # Return first created task shape for backwards compat with app's addTask() call
+    if not created:
+        raise HTTPException(422, "Could not parse task input")
+    first = created[0]
+    return {**first, "uid": f"t:{first['id']}", "tags": [], "completed_at": None}
 
 
 @router.get("/")

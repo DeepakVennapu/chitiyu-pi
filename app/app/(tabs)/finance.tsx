@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { SmartInputSheet } from "../../components/SmartInputSheet";
 import {
   View, Text, ScrollView, TouchableOpacity, Modal, TextInput,
   ActivityIndicator, RefreshControl, StyleSheet, SafeAreaView,
@@ -111,6 +112,9 @@ export default function FinanceScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // SmartInputSheet state
+  const [smartOpen, setSmartOpen] = useState(false);
 
   // Log expense modal
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -725,7 +729,7 @@ export default function FinanceScreen() {
       <View style={[s.fabRow, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
         <TouchableOpacity
           style={[s.fab, { backgroundColor: colors.cardElevated }]}
-          onPress={() => setSheetVisible(true)}
+          onPress={() => setSmartOpen(true)}
         >
           <Text style={[s.fabText, { color: colors.accent }]}>+ Log Expense</Text>
         </TouchableOpacity>
@@ -1001,6 +1005,13 @@ export default function FinanceScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <SmartInputSheet
+        visible={smartOpen}
+        onClose={() => setSmartOpen(false)}
+        onConfirmed={() => { setSmartOpen(false); loadData(); }}
+        domainLock="finance"
+      />
     </SafeAreaView>
   );
 }

@@ -126,6 +126,12 @@ class GoalProgressUpdate(BaseModel):
     current_amount: float
 
 
+class TransactionPreview(BaseModel):
+    user_id: int = 1
+    text: str
+    context: str = ""
+
+
 # ── Accounts ──────────────────────────────────────────────────────────────────
 
 @router.get("/accounts")
@@ -283,6 +289,16 @@ def get_transactions(user_id: int = 1, date_from: str | None = None,
         return {"transactions": txns}
     finally:
         conn.close()
+
+
+@router.post("/transactions/preview")
+def preview_transaction(body: TransactionPreview):
+    """Parse NL expense text and return structured preview — no insert."""
+    from domains.finance.tools import parse_transaction_input
+    result = parse_transaction_input(body.text, body.context)
+    if result is None:
+        raise HTTPException(422, "Couldn't parse that expense. Try: 'spent $45 at Whole Foods on groceries'.")
+    return result
 
 
 @router.delete("/transactions/{tx_id}")

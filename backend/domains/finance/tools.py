@@ -38,7 +38,7 @@ Context (if any): {context}
 Input: {text}"""
 
 
-def _parse_transaction_text(text: str, context: str = "") -> dict | None:
+def parse_transaction_input(text: str, context: str = "") -> dict | None:
     """Parse NL expense text via Haiku. Returns structured dict or None on parse failure."""
     today = today_local()
     prompt = _PARSE_EXPENSE_PROMPT.format(today=today, context=context, text=text)
@@ -83,7 +83,7 @@ def add_transaction(conn: sqlite3.Connection, user_id: int,
                     text: str, context: str = "") -> str:
     """Telegram/orchestrator path — parses NL text, inserts, returns human-readable string."""
     today = today_local()
-    data = _parse_transaction_text(text, context)
+    data = parse_transaction_input(text, context)
     if not data:
         return "Couldn't parse that expense. Try: 'spent $45 at Whole Foods on groceries'."
 
@@ -111,7 +111,7 @@ def add_transaction_structured(conn: sqlite3.Connection, user_id: int,
     """App/REST path — parses NL text, inserts, returns the inserted row as a dict.
     Returns None if the text cannot be parsed (caller raises HTTP 422)."""
     today = today_local()
-    data = _parse_transaction_text(text, context)
+    data = parse_transaction_input(text, context)
     if not data:
         return None
 
