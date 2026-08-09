@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { SmartInputSheet } from "../../components/SmartInputSheet";
 import {
   View, Text, ScrollView, TouchableOpacity, Modal, TextInput,
   ActivityIndicator, RefreshControl, StyleSheet, SafeAreaView,
@@ -58,6 +59,9 @@ export default function HealthScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // SmartInputSheet state
+  const [smartOpen, setSmartOpen] = useState(false);
 
   // Sheet state
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -299,7 +303,7 @@ export default function HealthScreen() {
 
         {/* Log Meal CTA — only on today */}
         {isToday && (
-          <TouchableOpacity style={[styles.primaryButton, styles.mx, { backgroundColor: colors.accent }]} onPress={openSheet}>
+          <TouchableOpacity style={[styles.primaryButton, styles.mx, { backgroundColor: colors.accent }]} onPress={() => setSmartOpen(true)}>
             <Text style={styles.primaryButtonText}>+ Log Meal</Text>
           </TouchableOpacity>
         )}
@@ -472,6 +476,13 @@ export default function HealthScreen() {
           </View>
         </View>
       </Modal>
+
+      <SmartInputSheet
+        visible={smartOpen}
+        onClose={() => setSmartOpen(false)}
+        onConfirmed={() => { setSmartOpen(false); loadData(selectedDate); }}
+        domainLock="health"
+      />
     </SafeAreaView>
   );
 }

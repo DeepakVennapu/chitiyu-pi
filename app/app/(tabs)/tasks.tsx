@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { SmartInputSheet } from "../../components/SmartInputSheet";
 import {
   View,
   Text,
@@ -337,6 +338,8 @@ export default function TasksScreen() {
   const [showInAdvance, setShowInAdvance] = useState(false);
   const [adding, setAdding] = useState(false);
 
+  const [smartOpen, setSmartOpen] = useState(false);
+
   const isToday = selectedDate === todayISO;
 
   const loadSummary = useCallback(async () => {
@@ -484,7 +487,7 @@ export default function TasksScreen() {
 
         <TouchableOpacity
           style={[styles.primaryButton, { backgroundColor: colors.accent }]}
-          onPress={openSheet}
+          onPress={() => setSmartOpen(true)}
         >
           <Text style={styles.primaryButtonText}>+ Add Task</Text>
         </TouchableOpacity>
@@ -618,6 +621,13 @@ export default function TasksScreen() {
           </View>
         </View>
       </Modal>
+
+      <SmartInputSheet
+        visible={smartOpen}
+        onClose={() => setSmartOpen(false)}
+        onConfirmed={() => { setSmartOpen(false); loadData(); }}
+        domainLock="tasks"
+      />
     </SafeAreaView>
   );
 }
