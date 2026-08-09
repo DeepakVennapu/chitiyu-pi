@@ -237,3 +237,18 @@ def test_add_transaction_structured_returns_none_on_parse_failure(conn, user_id)
     with patch("domains.finance.tools.call_claude", return_value="not json"):
         result = add_transaction_structured(conn, user_id, "xyz")
     assert result is None
+
+
+# ── parse_transaction_input (public API for preview endpoint) ────────────────
+
+def test_parse_transaction_input_basic():
+    from domains.finance.tools import parse_transaction_input
+    mock_response = json.dumps({
+        "date": "2026-08-08", "amount": -50.0,
+        "category": "dining", "description": "Cheesecake Factory"
+    })
+    with patch("domains.finance.tools.call_claude", return_value=mock_response):
+        result = parse_transaction_input("$50 at Cheesecake Factory", context="")
+    assert result["amount"] == -50.0
+    assert result["category"] == "dining"
+    assert result["description"] == "Cheesecake Factory"
