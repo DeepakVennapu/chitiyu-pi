@@ -89,7 +89,7 @@ def confirm(body: ConfirmRequest):
             from domains.tasks.db import insert_task, insert_template
             results = []
             for item in body.preview:
-                if item.get("is_recurring") and item.get("anchor_date"):
+                if item.get("recurrence") and item.get("anchor_date"):
                     insert_template(conn, body.user_id, title=item["title"],
                                     recurrence=item["recurrence"], anchor_date=item["anchor_date"],
                                     advance_days=1)

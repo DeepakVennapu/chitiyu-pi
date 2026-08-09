@@ -115,7 +115,11 @@ def build_chat_response(
             from domains.tasks.tools import parse_task_input
             parsed_tasks = parse_task_input(tasks_extract, today=today)
             if parsed_tasks:
-                domains.append({"domain": "tasks", "preview": parsed_tasks, "extract": tasks_extract})
+                tasks_with_flag = [
+                    {**t, "is_recurring": bool(t.get("recurrence"))}
+                    for t in parsed_tasks
+                ]
+                domains.append({"domain": "tasks", "preview": tasks_with_flag, "extract": tasks_extract})
         except Exception as exc:
             logger.warning("chat: tasks parse failed: %s", exc)
 

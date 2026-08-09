@@ -259,14 +259,6 @@ export function SmartInputSheet({
                 {phase.response.prose ? (
                   <View style={{ backgroundColor: colors.card, borderRadius: 12, padding: 16, marginBottom: 16 }}>
                     <Text style={{ color: colors.text, lineHeight: 22 }}>{phase.response.prose}</Text>
-                    {phase.response.actions.map((action, i) => (
-                      <TouchableOpacity key={i} style={s.actionBtn} onPress={() => {
-                        setText(action.prefill);
-                        setPhase({ type: "idle" });
-                      }}>
-                        <Text style={{ color: colors.accent }}>+ {action.label}</Text>
-                      </TouchableOpacity>
-                    ))}
                     {/* Prose-only: no domains to confirm — show Done */}
                     {phase.response.domains.length === 0 && (
                       <TouchableOpacity
@@ -278,6 +270,20 @@ export function SmartInputSheet({
                     )}
                   </View>
                 ) : null}
+
+                {/* Action buttons — shown even when prose is empty */}
+                {phase.response.actions.length > 0 && (
+                  <View style={{ marginBottom: 12 }}>
+                    {phase.response.actions.map((action, i) => (
+                      <TouchableOpacity key={i} style={s.actionBtn} onPress={() => {
+                        setText(action.prefill);
+                        setPhase({ type: "idle" });
+                      }}>
+                        <Text style={{ color: colors.accent }}>+ {action.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
 
                 {/* "Log all" shortcut when multiple domains */}
                 {phase.type === "preview" && phase.response.domains.length > 1 && (

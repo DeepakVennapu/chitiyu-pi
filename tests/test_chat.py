@@ -167,3 +167,20 @@ def test_chat_confirm_finance(client, conn):
     txns = list_transactions(conn, 1)
     assert len(txns) == 1
     assert txns[0]["description"] == "Cheesecake Factory"
+
+
+def test_chat_confirm_tasks_recurring(client, conn):
+    from domains.tasks.db import get_active_templates
+    resp = client.post("/chat/confirm", json={
+        "domain": "tasks",
+        "preview": [
+            {"title": "Call mom", "due_at": None, "priority": 0, "is_recurring": True,
+             "recurrence": "weekly", "anchor_date": "2026-08-11"},
+        ],
+        "user_id": 1,
+    }, headers={"X-API-Key": "test"})
+    assert resp.status_code == 200
+    templates = get_active_templates(conn, 1)
+    assert len(templates) == 1
+    assert templates[0]["title"] == "Call mom"
+    assert templates[0]["recurrence"] == "weekly"
