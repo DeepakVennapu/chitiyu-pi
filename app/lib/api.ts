@@ -402,3 +402,78 @@ export const saveFact = (text: string) =>
 
 export const getEntities = () =>
   request<KnowledgeEntity[]>("GET", "/knowledge/entities");
+
+// ─── Chat (Global Input) ──────────────────────────────────────────────────────
+
+export type DomainName = "health" | "finance" | "tasks";
+
+export interface HealthPreview {
+  description: string;
+  calories: number;
+  protein: number;
+  fat: number | null;
+  carbs: number | null;
+}
+
+export interface FinancePreview {
+  description: string;
+  amount: number;
+  category: string;
+  date: string;
+}
+
+export interface TaskPreviewItem {
+  title: string;
+  due_at: string | null;
+  priority: number;
+  is_recurring: boolean;
+  recurrence?: string;
+  anchor_date?: string;
+}
+
+export type DomainPreview = HealthPreview | FinancePreview | TaskPreviewItem[];
+
+export interface DomainBlock {
+  domain: DomainName;
+  preview: DomainPreview;
+  extract: string;
+}
+
+export interface ChatAction {
+  label: string;
+  domain: DomainName;
+  prefill: string;
+}
+
+export interface ChatResponse {
+  prose: string;
+  domains: DomainBlock[];
+  actions: ChatAction[];
+}
+
+export interface ConfirmResult {
+  ok: boolean;
+  result: string;
+}
+
+export const chatMessage = (text: string) =>
+  request<ChatResponse>("POST", "/chat", { text });
+
+export const confirmDomain = (domain: DomainName, preview: DomainPreview, user_id = 1) =>
+  request<ConfirmResult>("POST", "/chat/confirm", { domain, preview, user_id });
+
+export const previewDomain = async (domain: DomainName, text: string): Promise<DomainBlock> => {
+  if (domain === "health") {
+    const data = await request<MealPreviewResult>("POST", "/health/meals/preview", { text });
+    return { domain: "health", preview: data, extract: text };
+  }
+  if (domain === "finance") {
+    const data = await request<FinancePreview>("POST", "/finance/transactions/preview", { text });
+    return { domain: "finance", preview: data, extract: text };
+  }
+  // tasks: no standalone preview endpoint — route through global /chat
+  const response = await chatMessage(text);
+  const block = response.domains.find(d => d.domain === "tasks");
+  if (!block) throw new Error("No tasks found in: " + text);
+  return block;
+};
