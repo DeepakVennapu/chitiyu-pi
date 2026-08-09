@@ -59,3 +59,17 @@ def test_net_worth_unique_per_user_date(conn):
     with pytest.raises(Exception):
         conn.execute("INSERT INTO net_worth(user_id, snapshot_date, total) VALUES (1,'2026-08-01',55000)")
         conn.commit()
+
+
+def test_task_templates_table_exists(conn):
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='task_templates'"
+    ).fetchone()
+    assert row is not None
+
+
+def test_task_instances_table_exists(conn):
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='task_instances'"
+    ).fetchone()
+    assert row is not None

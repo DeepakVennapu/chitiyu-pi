@@ -1,64 +1,60 @@
-import React, { useRef, useState } from "react";
-import { Alert, Animated, PanResponder, StyleSheet, Text, View } from "react-native";
+import React, { useRef } from "react";
+import { View, Text, Animated, PanResponder, StyleSheet, Alert } from "react-native";
 import { useTheme } from "../lib/theme";
 
-const DELETE_WIDTH = 80;
-
 interface Props {
-  confirmTitle?: string;
-  confirmMessage?: string;
-  onDelete: () => void;
-  backgroundColor: string;  // caller passes colors.card or colors.background
   children: React.ReactNode;
+  confirmTitle: string;
+  confirmMessage: string;
+  onDelete: () => void;
+  backgroundColor: string;
 }
 
-export function SwipeableRow({ confirmTitle = "Delete?", confirmMessage, onDelete, backgroundColor, children }: Props) {
+const SWIPE_THRESHOLD = -80;
+
+export function SwipeableRow({
+  children,
+  confirmTitle,
+  confirmMessage,
+  onDelete,
+  backgroundColor,
+}: Props) {
   const { colors } = useTheme();
   const translateX = useRef(new Animated.Value(0)).current;
-  const [open, setOpen] = useState(false);
-
-  const snapOpen = () => {
-    setOpen(true);
-    Animated.spring(translateX, { toValue: -DELETE_WIDTH, useNativeDriver: true, bounciness: 0 }).start();
-  };
-
-  const snapClose = () => {
-    setOpen(false);
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
-  };
+  const deleteOpacity = translateX.interpolate({
+    inputRange: [SWIPE_THRESHOLD, 0],
+    outputRange: [1, 0],
+    extrapolate: "clamp",
+  });
 
   const panResponder = PanResponder.create({
-    onMoveShouldSetPanResponder: (_, { dx, dy }) =>
-      Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy),
-    onPanResponderMove: (_, { dx }) => {
-      const base = open ? -DELETE_WIDTH : 0;
-      translateX.setValue(Math.max(-DELETE_WIDTH * 1.1, Math.min(0, base + dx)));
-    },
+    onMoveShouldSetPanResponder: (_, { dx }) => Math.abs(dx) > 10,
+    onPanResponderMove: (_, { dx }) => { if (dx < 0) translateX.setValue(dx); },
     onPanResponderRelease: (_, { dx }) => {
-      if (!open && dx < -DELETE_WIDTH * 0.4) snapOpen();
-      else if (open && dx > DELETE_WIDTH * 0.3) snapClose();
-      else if (open) snapOpen();
-      else snapClose();
+      if (dx < SWIPE_THRESHOLD) {
+        Alert.alert(confirmTitle, confirmMessage, [
+          { text: "Cancel", onPress: () => resetPosition() },
+          {
+            text: "Delete",
+            onPress: () => onDelete(),
+            style: "destructive",
+          },
+        ]);
+      } else {
+        resetPosition();
+      }
     },
   });
 
-  const handleDeletePress = () => {
-    Alert.alert(confirmTitle, confirmMessage, [
-      { text: "Cancel", style: "cancel", onPress: snapClose },
-      {
-        text: "Delete", style: "destructive",
-        onPress: () => {
-          Animated.timing(translateX, { toValue: -400, duration: 200, useNativeDriver: true }).start(onDelete);
-        },
-      },
-    ]);
+  const resetPosition = () => {
+    Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
   };
 
   return (
-    <View style={styles.wrapper}>
-      <View style={[styles.deleteAction, { backgroundColor: colors.swipeDelete }]}>
-        <Text style={styles.deleteLabel} onPress={handleDeletePress}>Delete</Text>
-      </View>
+    <View style={styles.container}>
+      <Animated.View style={[styles.deleteBackground, { opacity: deleteOpacity, backgroundColor: colors.swipeDelete }]}>
+        <Text style={styles.deleteLabel}>Delete</Text>
+      </Animated.View>
       <Animated.View
         style={[styles.row, { transform: [{ translateX }], backgroundColor }]}
         {...panResponder.panHandlers}
@@ -70,11 +66,8 @@ export function SwipeableRow({ confirmTitle = "Delete?", confirmMessage, onDelet
 }
 
 const styles = StyleSheet.create({
-  wrapper: { overflow: "hidden" },
-  deleteAction: {
-    position: "absolute", right: 0, top: 0, bottom: 0, width: DELETE_WIDTH,
-    alignItems: "center", justifyContent: "center",
-  },
-  deleteLabel: { color: "#fff", fontWeight: "700", fontSize: 13 },
-  row: { flexDirection: "row" },
+  container: { position: "relative", overflow: "hidden" },
+  deleteBackground: { position: "absolute", right: 0, top: 0, bottom: 0, width: 120, alignItems: "center", justifyContent: "center" },
+  deleteLabel: { color: "#fff", fontWeight: "600", fontSize: 14 },
+  row: { flexDirection: "row", alignItems: "center" },
 });

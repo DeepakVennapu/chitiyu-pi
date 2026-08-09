@@ -318,22 +318,31 @@ export const createMilestone = (m: Omit<FinancialMilestone, "id">) =>
 
 export interface Task {
   id: number;
+  uid?: string;
   title: string;
   due_at: string | null;
   completed_at: string | null;
-  priority: string | null;
+  priority: number;
   tags: string[];
+  is_recurring?: boolean;
 }
 
-// GET /tasks/overdue and /tasks/today return plain Task[] arrays (no wrapper object).
+export interface TaskTemplate {
+  id: number;
+  title: string;
+  recurrence: "daily" | "weekly" | "monthly" | "yearly";
+  anchor_date: string;
+  advance_days: number;
+}
+
 export const getTasksOverdue = () =>
   request<Task[]>("GET", "/tasks/overdue");
 
 export const getTasksToday = () =>
   request<Task[]>("GET", "/tasks/today");
 
-export const addTask = (title: string, due_at?: string) =>
-  request<Task>("POST", "/tasks/", { title, ...(due_at ? { due_at } : {}) });
+export const addTask = (title: string, due_at?: string, priority: number = 0) =>
+  request<Task>("POST", "/tasks/", { title, priority, ...(due_at ? { due_at } : {}) });
 
 export const getTasksByDate = (date: string) =>
   request<Task[]>("GET", `/tasks/by-date?date=${encodeURIComponent(date)}`);
@@ -343,6 +352,25 @@ export const completeTask = (id: number) =>
 
 export const deleteTask = (id: number) =>
   request<{ ok: boolean }>("DELETE", `/tasks/${id}`);
+
+export const getTasksDatesSummary = (start: string, end: string) =>
+  request<Record<string, number>>("GET", `/tasks/dates-summary?start=${start}&end=${end}`);
+
+export const createTaskTemplate = (
+  title: string,
+  recurrence: TaskTemplate["recurrence"],
+  anchor_date: string,
+  advance_days?: number
+) =>
+  request<TaskTemplate>("POST", "/tasks/templates", {
+    title, recurrence, anchor_date, ...(advance_days !== undefined ? { advance_days } : {})
+  });
+
+export const completeInstance = (id: number) =>
+  request<{ ok: boolean }>("PATCH", `/tasks/instances/${id}/complete`, {});
+
+export const deleteInstance = (id: number) =>
+  request<{ ok: boolean }>("DELETE", `/tasks/instances/${id}`);
 
 // ─── Knowledge ────────────────────────────────────────────────────────────────
 

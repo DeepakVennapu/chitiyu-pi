@@ -216,6 +216,27 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             generated_at TEXT NOT NULL DEFAULT (datetime('now')),
             UNIQUE(user_id, scope)
         );
+        CREATE TABLE IF NOT EXISTS task_templates (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id      INTEGER NOT NULL DEFAULT 1,
+            title        TEXT NOT NULL,
+            recurrence   TEXT NOT NULL DEFAULT 'none' CHECK(recurrence IN ('none','daily','weekly','monthly','yearly')),
+            anchor_date  TEXT NOT NULL,
+            advance_days INTEGER NOT NULL DEFAULT 1,
+            created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS task_instances (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            template_id  INTEGER NOT NULL REFERENCES task_templates(id) ON DELETE CASCADE,
+            user_id      INTEGER NOT NULL DEFAULT 1,
+            due_date     TEXT NOT NULL,
+            completed_at TEXT,
+            deleted_at   TEXT,
+            created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(template_id, due_date)
+        );
+        CREATE INDEX IF NOT EXISTS idx_task_instances_user_due
+            ON task_instances(user_id, due_date);
     """)
     try:
         conn.execute("""
