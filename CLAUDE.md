@@ -40,6 +40,8 @@ chitiyu-pi/
                              # create_tasks_from_input(conn, user_id, text) → list[dict]  — parse + insert all tasks/templates
                              # POST /tasks/ now routes through create_tasks_from_input (LLM parses, not literal insert)
       knowledge/             # entities, facts, fields, relationships, events + sqlite-vec embeddings
+                             # GET /knowledge/entities — returns entities with fact_count (LEFT JOIN facts)
+                             # GET /knowledge/search?q= — semantic search via 384-dim embeddings
       journal/               # journal_entries (date-keyed, raw + retro JSON)
     orchestrator/
       handler.py             # Main agent loop: tier1 → classify → knowledge inject → Haiku tool loop → Sonnet polish
@@ -180,16 +182,25 @@ Insights engine → assemble cross-domain context → Sonnet → insights table
 
 ## Open Items / Known Gaps
 
-- **Health sync (iOS → backend)** — Steps, sleep, HR all show "—". Backend endpoints work. iOS Shortcuts "Find Health Samples" action hangs indefinitely. Needs EAS dev build (native HealthKit) or alternative sync path.
-- **Meal time backdating** — selecting "Lunch" slot at 7pm logs wall-clock time → meal appears under Dinner bucket. Fix: when selected slot doesn't match current-hour's natural bucket, use slot midpoint time instead
-- **CALENDAR_ICS_URL** — not configured; calendar integration exists but is inactive
-- **Siri log-expense** — stub only; needs wiring to finance tools
-- **4 Siri Shortcuts** — log-meal, log-expense, add-task, macros — not yet set up on device
-- **Finance recurring section empty** — `family $583` deleted (phantom row). Recurring accordion will render empty until real recurring spend is added. Consider hiding empty sections.
-- **Finance: log discretionary manually** — Deepak logs discretionary transactions manually via app. Fixed/recurring costs not tracked as transactions (known, by design).
-- **SmartInputSheet partial log-all failure** — if one parallel confirmDomain fails mid-flight, UI resets to idle with no record of which domains were confirmed. Server rows already persisted; client loses state. No recovery UX yet.
-- **tasks.tsx dead modal** — old Add Task inline sheet (openSheet state + 80-line modal with priority/date/recurrence pickers) is unreachable but still bundled. Safe to delete when cleaning up.
-- **POST /tasks/ now always LLM-parses** — `body.due_at` and `body.priority` are silently ignored; LLM infers from `body.title` text. Intentional — smart parsing is the design — but programmatic callers (e.g. Siri) that pass structured fields will have them ignored.
+Full backlog lives in project memory: `~/.claude/projects/-Users-me-deep-workspace-chitiyu/memory/enhancements.md`
+
+**Critical:**
+- **Health sync (iOS → backend)** — Steps, sleep, HR all show "—". iOS Shortcuts "Find Health Samples" hangs. Needs EAS dev build (native HealthKit) or Health Auto Export alternative. Highest priority gap.
+- **Meal time backdating** — selecting "Lunch" at 7pm logs wall-clock time → meal appears under Dinner bucket. Fix: use slot midpoint (12:00 for lunch) when wall-clock doesn't match selected slot. `app/lib/dateUtils.ts slotISO()`
+- **SmartInputSheet partial log-all failure** — if one confirmDomain fails mid-flight, UI resets to idle; server rows already persisted; no recovery UX. `SmartInputSheet.tsx:167`
+- **Recurring task advance_days hardcoded to 1** — "Show in advance" toggle doesn't wire value to API. `chat_router.py:94`
+- **Task template delete removes only one instance** — no UI to delete entire recurring series. `tasks.tsx:447`
+
+**Quick wins pending:**
+- **Siri log-expense** — stub only (`siri/router.py:89`); needs wiring to `parse_transaction_input` + `insert_transaction`
+- **tasks.tsx dead modal** — old Add Task inline sheet (openSheet state + ~80 lines) unreachable; safe to delete
+- **Finance account delete** — no swipe-delete UI on accounts
+- **Budget $0 validation** — Save enabled with amount=0; should be disabled
+- **CALENDAR_ICS_URL** — not configured; calendar integration inactive
+
+**By design:**
+- **Finance: log discretionary manually** — Fixed/recurring costs not tracked as transactions (intentional)
+- **POST /tasks/ always LLM-parses** — `body.due_at` and `body.priority` silently ignored; LLM infers from title text. Programmatic callers must use text-only intent.
 
 ## Running Locally
 
@@ -206,7 +217,7 @@ npx expo start                        # scan QR in Expo Go
 
 # Tests
 cd ~/deep-workspace/chitiyu-pi
-uv run pytest                         # 208 tests
+uv run pytest                         # 210 tests
 ```
 
 ## Key Env Vars (.env at repo root)
