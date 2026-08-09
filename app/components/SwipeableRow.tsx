@@ -1,5 +1,5 @@
-import React, { useRef } from "react";
-import { View, Text, Animated, PanResponder, StyleSheet, Alert } from "react-native";
+import React, { useRef, useState } from "react";
+import { View, Text, Animated, PanResponder, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { useTheme } from "../lib/theme";
 
 interface Props {
@@ -10,7 +10,8 @@ interface Props {
   backgroundColor: string;
 }
 
-const SWIPE_THRESHOLD = -80;
+const REVEAL_WIDTH = 80;
+const SWIPE_THRESHOLD = -50;
 
 export function SwipeableRow({
   children,
@@ -21,40 +22,52 @@ export function SwipeableRow({
 }: Props) {
   const { colors } = useTheme();
   const translateX = useRef(new Animated.Value(0)).current;
-  const deleteOpacity = translateX.interpolate({
-    inputRange: [SWIPE_THRESHOLD, 0],
-    outputRange: [1, 0],
-    extrapolate: "clamp",
-  });
+  const [revealed, setRevealed] = useState(false);
 
-  const panResponder = PanResponder.create({
-    onMoveShouldSetPanResponder: (_, { dx }) => Math.abs(dx) > 10,
-    onPanResponderMove: (_, { dx }) => { if (dx < 0) translateX.setValue(dx); },
+  const snapTo = (toValue: number) => {
+    Animated.spring(translateX, { toValue, useNativeDriver: true, bounciness: 0 }).start();
+    setRevealed(toValue < 0);
+  };
+
+  const panResponder = useRef(PanResponder.create({
+    onMoveShouldSetPanResponder: (_, { dx, dy }) =>
+      Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy),
+    onPanResponderGrant: () => {
+      translateX.stopAnimation();
+    },
+    onPanResponderMove: (_, { dx }) => {
+      const base = revealed ? -REVEAL_WIDTH : 0;
+      const next = base + dx;
+      if (next <= 0) translateX.setValue(Math.max(next, -REVEAL_WIDTH));
+    },
     onPanResponderRelease: (_, { dx }) => {
-      if (dx < SWIPE_THRESHOLD) {
-        Alert.alert(confirmTitle, confirmMessage, [
-          { text: "Cancel", onPress: () => resetPosition() },
-          {
-            text: "Delete",
-            onPress: () => onDelete(),
-            style: "destructive",
-          },
-        ]);
+      if (revealed) {
+        // already open: swipe right closes, anything else stays open
+        if (dx > 20) snapTo(0);
+        else snapTo(-REVEAL_WIDTH);
       } else {
-        resetPosition();
+        if (dx < SWIPE_THRESHOLD) snapTo(-REVEAL_WIDTH);
+        else snapTo(0);
       }
     },
-  });
+  })).current;
 
-  const resetPosition = () => {
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+  const handleDeletePress = () => {
+    Alert.alert(confirmTitle, confirmMessage, [
+      { text: "Cancel", style: "cancel", onPress: () => snapTo(0) },
+      { text: "Delete", style: "destructive", onPress: () => { snapTo(0); onDelete(); } },
+    ]);
   };
 
   return (
     <View style={styles.container}>
-      <Animated.View style={[styles.deleteBackground, { opacity: deleteOpacity, backgroundColor: colors.swipeDelete }]}>
+      <TouchableOpacity
+        style={[styles.deleteBackground, { backgroundColor: colors.swipeDelete }]}
+        onPress={handleDeletePress}
+        activeOpacity={0.8}
+      >
         <Text style={styles.deleteLabel}>Delete</Text>
-      </Animated.View>
+      </TouchableOpacity>
       <Animated.View
         style={[styles.row, { transform: [{ translateX }], backgroundColor }]}
         {...panResponder.panHandlers}
@@ -67,7 +80,10 @@ export function SwipeableRow({
 
 const styles = StyleSheet.create({
   container: { position: "relative", overflow: "hidden" },
-  deleteBackground: { position: "absolute", right: 0, top: 0, bottom: 0, width: 120, alignItems: "center", justifyContent: "center" },
+  deleteBackground: {
+    position: "absolute", right: 0, top: 0, bottom: 0, width: REVEAL_WIDTH,
+    alignItems: "center", justifyContent: "center",
+  },
   deleteLabel: { color: "#fff", fontWeight: "600", fontSize: 14 },
   row: { flexDirection: "row", alignItems: "center" },
 });
