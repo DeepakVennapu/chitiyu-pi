@@ -129,10 +129,11 @@ Insights engine → assemble cross-domain context → Sonnet → insights table
 
 ## Open Items / Known Gaps
 
+- **Health sync (iOS → backend)** — Steps, sleep, HR all show "—". Backend endpoints work. iOS Shortcuts "Find Health Samples" action hangs indefinitely. Needs EAS dev build (native HealthKit) or alternative sync path.
+- **Intelligent task logging** — Natural language task creation via Telegram (AI-parsed due dates, priority). `tools.py` create_task doesn't pass priority param yet.
 - **Meal time backdating** — selecting "Lunch" slot at 7pm logs wall-clock time → meal appears under Dinner bucket. Fix: when selected slot doesn't match current-hour's natural bucket, use slot midpoint time instead
 - **CALENDAR_ICS_URL** — not configured; calendar integration exists but is inactive
 - **Siri log-expense** — stub only; needs wiring to finance tools
-- **Apple Health Shortcut** — Siri Shortcut not yet created on device
 - **4 Siri Shortcuts** — log-meal, log-expense, add-task, macros — not yet set up on device
 
 ## Running Locally
