@@ -1,5 +1,5 @@
-import React, { useRef, useState } from "react";
-import { View, Text, Animated, PanResponder, StyleSheet, TouchableOpacity, Alert } from "react-native";
+import React, { useRef } from "react";
+import { View, Text, Animated, PanResponder, Platform, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { useTheme } from "../lib/theme";
 
 interface Props {
@@ -21,12 +21,17 @@ export function SwipeableRow({
   backgroundColor,
 }: Props) {
   const { colors } = useTheme();
+
+  // Web: PanResponder is a no-op — just render children, no swipe chrome
+  if (Platform.OS === "web") {
+    return <View style={{ backgroundColor }}>{children}</View>;
+  }
   const translateX = useRef(new Animated.Value(0)).current;
-  const [revealed, setRevealed] = useState(false);
+  const revealedRef = useRef(false);
 
   const snapTo = (toValue: number) => {
+    revealedRef.current = toValue < 0;
     Animated.spring(translateX, { toValue, useNativeDriver: true, bounciness: 0 }).start();
-    setRevealed(toValue < 0);
   };
 
   const panResponder = useRef(PanResponder.create({
@@ -36,13 +41,12 @@ export function SwipeableRow({
       translateX.stopAnimation();
     },
     onPanResponderMove: (_, { dx }) => {
-      const base = revealed ? -REVEAL_WIDTH : 0;
+      const base = revealedRef.current ? -REVEAL_WIDTH : 0;
       const next = base + dx;
       if (next <= 0) translateX.setValue(Math.max(next, -REVEAL_WIDTH));
     },
     onPanResponderRelease: (_, { dx }) => {
-      if (revealed) {
-        // already open: swipe right closes, anything else stays open
+      if (revealedRef.current) {
         if (dx > 20) snapTo(0);
         else snapTo(-REVEAL_WIDTH);
       } else {
