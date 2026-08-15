@@ -62,6 +62,16 @@ def lookup_meal_macros(conn: sqlite3.Connection, text: str) -> dict | None:
         # Try singular form if plural search fails (e.g. "eggs" → "egg")
         if ing is None and name.endswith("s"):
             ing = search_ingredient(conn, name[:-1])
+        # Try progressively shorter prefixes to strip adjectives (e.g. "oats dry" → "oats")
+        if ing is None:
+            words = name.split()
+            for end in range(len(words) - 1, 0, -1):
+                shorter = " ".join(words[:end])
+                ing = search_ingredient(conn, shorter)
+                if ing is None and shorter.endswith("s"):
+                    ing = search_ingredient(conn, shorter[:-1])
+                if ing is not None:
+                    break
         if ing is None:
             unmatched.append(name)
             continue

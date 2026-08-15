@@ -90,7 +90,11 @@ def meals_today(user_id: int = 1):
 @router.post("/meals/preview")
 def preview_meal(body: MealPreview):
     from domains.health.tools import parse_meal_macros
-    data = parse_meal_macros(body.text, body.context)
+    conn = _conn()
+    try:
+        data = parse_meal_macros(body.text, body.context, conn=conn)
+    finally:
+        conn.close()
     if data is None:
         raise HTTPException(422, "Couldn't parse that meal. Try: '2 eggs, toast, coffee'.")
     return data

@@ -54,3 +54,15 @@ def test_lookup_description_combined():
     result = lookup_meal_macros(conn, "100g oats, 1 banana")
     assert result is not None
     assert "oats" in result["description"].lower() or "banana" in result["description"].lower()
+
+from domains.health.tools import parse_meal_macros
+
+def test_parse_meal_macros_uses_local_when_matched():
+    conn = make_conn()
+    seed(conn)
+    # "100g oats dry" should resolve locally, no Claude call
+    result = parse_meal_macros("100g oats dry", conn=conn)
+    assert result is not None
+    assert result["calories"] > 0
+    # coverage_pct only present on local hits
+    assert "coverage_pct" in result
