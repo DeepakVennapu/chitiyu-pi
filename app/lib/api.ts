@@ -103,6 +103,39 @@ export const logMeal = (text: string) =>
 export const getHealthMetricsToday = () =>
   request<HealthMetrics>("GET", "/health/metrics/today");
 
+export const syncHealthMetrics = (date: string, steps?: number, sleepTotalMins?: number, sleepDeepMins?: number, restingHr?: number) =>
+  request<{ ok: boolean }>("POST", "/health/sync", {
+    date,
+    steps: steps ?? null,
+    sleep_total_mins: sleepTotalMins ?? null,
+    sleep_deep_mins: sleepDeepMins ?? null,
+    resting_hr: restingHr ?? null,
+  });
+
+// ─── Health — Weight ──────────────────────────────────────────────────────────
+
+export interface WeightLog {
+  date: string;
+  weight_kg: number;
+  weight_lbs: number;  // computed by backend: weight_kg * 2.20462, rounded to 1dp
+  bodyfat_pct: number | null;
+  muscle_kg: number | null;
+  bmi: number | null;
+  source: string;
+}
+
+export interface WeightTrend {
+  logs: WeightLog[];
+  avg_weight_kg: number | null;
+  delta_kg: number | null;
+}
+
+export const getWeightLatest = () =>
+  request<WeightLog | Record<string, never>>("GET", "/health/weight/latest");
+
+export const getWeightTrend = (days = 7) =>
+  request<WeightTrend>("GET", `/health/weight/trend?days=${days}`);
+
 // ─── Health — additional ──────────────────────────────────────────────────────
 
 export interface MealPreviewResult {
@@ -129,8 +162,8 @@ export const deleteMeal = (id: number) =>
 export const getMealPreview = (text: string) =>
   request<MealPreviewResult>("POST", "/health/meals/preview", { text });
 
-export const logMealFromRecipe = (recipeId: number) =>
-  request<{ result: string }>("POST", "/health/meals/from-recipe", { recipe_id: recipeId });
+export const logMealFromRecipe = (recipeId: number, loggedAt?: string) =>
+  request<{ result: string }>("POST", "/health/meals/from-recipe", { recipe_id: recipeId, logged_at: loggedAt ?? null });
 
 export const logMealParsed = (data: MealPreviewResult, loggedAt?: string) =>
   request<LogMealResponse>("POST", "/health/meals/log-parsed", {
@@ -147,6 +180,9 @@ export const getRecipes = () =>
 
 export const createRecipe = (name: string, calories: number, protein: number, fat?: number, carbs?: number) =>
   request<{ id: number; name: string }>("POST", "/health/recipes", { name, calories, protein, fat, carbs });
+
+export const deleteRecipe = (id: number) =>
+  request<{ ok: boolean }>("DELETE", `/health/recipes/${id}`);
 
 // ─── Finance ──────────────────────────────────────────────────────────────────
 
@@ -251,6 +287,14 @@ export const setBudgetWithType = (
 ) =>
   request<Budget>("POST", "/finance/budgets", { category, amount, budget_type, period });
 
+export const deleteBudget = (id: number) =>
+  request<{ ok: boolean }>("DELETE", `/finance/budgets/${id}`);
+
+export const patchMilestoneActual = (target_date: string, actual_net_worth: number) =>
+  request<{ target_date: string; actual_net_worth: number }>(
+    "PATCH", `/finance/milestones/${target_date}`, { actual_net_worth }
+  );
+
 // ─── Accounts ─────────────────────────────────────────────────────────────────
 
 export interface Account {
@@ -304,6 +348,7 @@ export interface FinancialMilestone {
   expected_net_worth: number;
   actual_net_worth: number | null;
   note: string | null;
+  current_balance: number | null;
 }
 
 export const getMilestones = (period_label?: string) =>
@@ -333,6 +378,7 @@ export interface TaskTemplate {
   recurrence: "daily" | "weekly" | "monthly" | "yearly";
   anchor_date: string;
   advance_days: number;
+  priority: number;
 }
 
 export const getTasksOverdue = () =>
@@ -347,11 +393,17 @@ export const addTask = (title: string, due_at?: string, priority: number = 0) =>
 export const getTasksByDate = (date: string) =>
   request<Task[]>("GET", `/tasks/by-date?date=${encodeURIComponent(date)}`);
 
+export const getTasksAll = () =>
+  request<Task[]>("GET", "/tasks/");
+
 export const completeTask = (id: number) =>
   request<{ ok: boolean }>("PATCH", `/tasks/${id}/complete`, {});
 
 export const deleteTask = (id: number) =>
   request<{ ok: boolean }>("DELETE", `/tasks/${id}`);
+
+export const updateTask = (id: number, fields: { title?: string; due_at?: string | null; priority?: number }) =>
+  request<{ ok: boolean }>("PATCH", `/tasks/${id}`, fields);
 
 export const getTasksDatesSummary = (start: string, end: string) =>
   request<Record<string, number>>("GET", `/tasks/dates-summary?start=${start}&end=${end}`);
@@ -365,6 +417,12 @@ export const createTaskTemplate = (
   request<TaskTemplate>("POST", "/tasks/templates", {
     title, recurrence, anchor_date, ...(advance_days !== undefined ? { advance_days } : {})
   });
+
+export const getTaskTemplates = () =>
+  request<TaskTemplate[]>("GET", "/tasks/templates");
+
+export const deleteTaskTemplate = (id: number) =>
+  request<{ ok: boolean }>("DELETE", `/tasks/templates/${id}`);
 
 export const completeInstance = (id: number) =>
   request<{ ok: boolean }>("PATCH", `/tasks/instances/${id}/complete`, {});
