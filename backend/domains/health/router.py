@@ -257,6 +257,19 @@ def health_insights_context(user_id: int = 1, days: int = 7):
         hit_deep = sum(1 for d in days_with_metrics
                        if (d["sleep_deep_mins"] or 0) >= targets["sleep_deep_mins"])
 
+        weight_logs = get_weight_logs(conn, user_id, days=days)
+        weight_vals = [w["weight_kg"] for w in weight_logs]
+        weight_ctx = None
+        if weight_vals:
+            latest_kg = weight_vals[-1]
+            weight_ctx = {
+                "latest_kg": latest_kg,
+                "latest_lbs": round(latest_kg * 2.20462, 1),
+                "delta_kg": round(weight_vals[-1] - weight_vals[0], 1) if len(weight_vals) >= 2 else None,
+                "avg_kg": round(sum(weight_vals) / len(weight_vals), 1),
+                "days_logged": len(weight_vals),
+            }
+
         return {
             "as_of": today.isoformat(),
             "window_days": days,
@@ -276,6 +289,7 @@ def health_insights_context(user_id: int = 1, days: int = 7):
                 "deep_sleep_on_target": f"{hit_deep}/{len(days_with_metrics)} days",
             },
             "daily": daily,
+            "weight": weight_ctx,
         }
     finally:
         conn.close()
