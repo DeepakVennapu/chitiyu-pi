@@ -89,7 +89,16 @@ def delete_meal(conn: sqlite3.Connection, user_id: int, meal_id: int) -> bool:
     return cur.rowcount > 0
 
 
-def log_meal_from_recipe(conn: sqlite3.Connection, user_id: int, recipe_id: int) -> dict | None:
+def delete_recipe(conn: sqlite3.Connection, user_id: int, recipe_id: int) -> bool:
+    cur = conn.execute(
+        "DELETE FROM recipes WHERE id=? AND user_id=?", (recipe_id, user_id)
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def log_meal_from_recipe(conn: sqlite3.Connection, user_id: int, recipe_id: int,
+                         logged_at: str | None = None) -> dict | None:
     """Fetch recipe and insert a meal row. Returns the meal dict or None if recipe not found."""
     row = conn.execute(
         "SELECT * FROM recipes WHERE id=? AND user_id=?", (recipe_id, user_id)
@@ -97,12 +106,49 @@ def log_meal_from_recipe(conn: sqlite3.Connection, user_id: int, recipe_id: int)
     if not row:
         return None
     recipe = dict(row)
+    ts = _to_local_ts(logged_at) if logged_at else _local_now().strftime("%Y-%m-%d %H:%M:%S")
     conn.execute(
         "INSERT INTO meals(user_id, description, calories, protein, fat, carbs, source, recipe_id, logged_at) "
         "VALUES (?,?,?,?,?,?,?,?,?)",
         (user_id, recipe["name"], recipe["calories"], recipe["protein"],
-         recipe.get("fat"), recipe.get("carbs"), "recipe", recipe_id,
-         _local_now().strftime("%Y-%m-%d %H:%M:%S"))
+         recipe.get("fat"), recipe.get("carbs"), "recipe", recipe_id, ts)
     )
     conn.commit()
     return recipe
+
+
+def upsert_weight_log(conn: sqlite3.Connection, user_id: int, date: str,
+                      recorded_at: str, weight_kg: float,
+                      bodyfat_pct: float | None, muscle_kg: float | None,
+                      bmi: float | None, source: str = "renpho") -> None:
+    conn.execute(
+        """INSERT INTO weight_logs(user_id, date, recorded_at, weight_kg, bodyfat_pct, muscle_kg, bmi, source)
+           VALUES (?,?,?,?,?,?,?,?)
+           ON CONFLICT(user_id, date) DO UPDATE SET
+               recorded_at=excluded.recorded_at,
+               weight_kg=excluded.weight_kg,
+               bodyfat_pct=excluded.bodyfat_pct,
+               muscle_kg=excluded.muscle_kg,
+               bmi=excluded.bmi,
+               source=excluded.source""",
+        (user_id, date, recorded_at, weight_kg, bodyfat_pct, muscle_kg, bmi, source)
+    )
+    conn.commit()
+
+
+def get_weight_logs(conn: sqlite3.Connection, user_id: int, days: int = 7) -> list:
+    from datetime import date, timedelta
+    cutoff = (date.today() - timedelta(days=days - 1)).isoformat()
+    rows = conn.execute(
+        "SELECT * FROM weight_logs WHERE user_id=? AND date>=? ORDER BY date ASC",
+        (user_id, cutoff)
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_latest_weight(conn: sqlite3.Connection, user_id: int) -> dict | None:
+    row = conn.execute(
+        "SELECT * FROM weight_logs WHERE user_id=? ORDER BY date DESC LIMIT 1",
+        (user_id,)
+    ).fetchone()
+    return dict(row) if row else None
