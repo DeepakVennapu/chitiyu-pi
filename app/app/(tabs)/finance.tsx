@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { SmartInputSheet } from "../../components/SmartInputSheet";
+import { LogExpenseSheet } from "../../components/finance/LogExpenseSheet";
 import {
   View, Text, ScrollView, TouchableOpacity, Modal, TextInput,
   ActivityIndicator, RefreshControl, StyleSheet, SafeAreaView,
@@ -10,7 +11,7 @@ import { ProgressBar } from "../../components/ProgressBar";
 import { TransactionRow } from "../../components/TransactionRow";
 import { MilestoneRow } from "../../components/finance/MilestoneRow";
 import {
-  getFinanceSummary, getTransactions, logExpense, getSavingsGoals, createGoal,
+  getFinanceSummary, getTransactions, getSavingsGoals, createGoal,
   deleteTransaction, setBudgetWithType, deleteBudget, getBudgets, getAccounts, createAccount,
   getLatestBalances, updateBalances, getMilestones, patchMilestoneActual,
   type CategoryBudget, type Budget, type Transaction, type SavingsGoal,
@@ -19,8 +20,6 @@ import {
 import { useTheme } from "../../lib/theme";
 import { todayLocal } from "../../lib/dateUtils";
 import { fmt, fmtFull, accountTypeOrder, groupBalancesByType } from "../../lib/financeUtils";
-
-const EXPENSE_CATEGORIES = ["groceries", "dining", "fuel", "shopping", "misc", "home", "travel", "insurance", "gifts", "other"];
 
 // ── main screen ───────────────────────────────────────────────────────────────
 
@@ -49,11 +48,8 @@ export default function FinanceScreen() {
   // SmartInputSheet state
   const [smartOpen, setSmartOpen] = useState(false);
 
-  // Log expense modal
-  const [sheetVisible, setSheetVisible] = useState(false);
-  const [expenseInput, setExpenseInput] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [logging, setLogging] = useState(false);
+  // Log expense sheet
+  const [logExpenseVisible, setLogExpenseVisible] = useState(false);
 
   // Budget edit modal
   const [budgetModalVisible, setBudgetModalVisible] = useState(false);
@@ -169,23 +165,6 @@ export default function FinanceScreen() {
       defaultVal,
       "decimal-pad"
     );
-  };
-
-  const handleLogExpense = async () => {
-    if (!expenseInput.trim()) return;
-    setLogging(true);
-    try {
-      const tx = await logExpense(expenseInput.trim(), selectedCategory ?? undefined);
-      setTransactions((prev) => [tx, ...prev]);
-      setExpenseInput("");
-      setSelectedCategory(null);
-      setSheetVisible(false);
-      await loadData();
-    } catch (e: any) {
-      Alert.alert("Couldn't log expense", e?.message ?? "Please try again.");
-    } finally {
-      setLogging(false);
-    }
   };
 
   const handleDeleteTransaction = async (id: number) => {
@@ -748,46 +727,6 @@ export default function FinanceScreen() {
         )}
       </View>
 
-      {/* ── Log Expense Modal ──────────────────────────────────────────────── */}
-      <Modal visible={sheetVisible} transparent animationType="slide" onRequestClose={() => setSheetVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={s.overlay}>
-          <View style={[s.sheet, { backgroundColor: colors.card }]}>
-            <Text style={[s.sheetTitle, { color: colors.text }]}>Log an Expense</Text>
-            <Text style={[s.pickerLabel, { color: colors.textSecondary }]}>Category (optional)</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
-              <View style={s.pillRow}>
-                {EXPENSE_CATEGORIES.map((cat) => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[s.pill, { backgroundColor: selectedCategory === cat ? colors.accent : colors.cardElevated }]}
-                    onPress={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
-                  >
-                    <Text style={[s.pillText, { color: selectedCategory === cat ? "#fff" : colors.textSecondary }]}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-            <TextInput
-              style={[s.input, { backgroundColor: colors.inputBg, color: colors.text }]}
-              value={expenseInput}
-              onChangeText={setExpenseInput}
-              placeholder="e.g. $45 at Whole Foods"
-              placeholderTextColor={colors.textTertiary}
-              multiline autoFocus
-            />
-            <TouchableOpacity
-              style={[s.submitBtn, { backgroundColor: colors.accent }, logging && s.disabled]}
-              onPress={handleLogExpense} disabled={logging}
-            >
-              {logging ? <ActivityIndicator color="#fff" /> : <Text style={s.submitText}>Log Expense</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={s.cancelBtn} onPress={() => setSheetVisible(false)}>
-              <Text style={[s.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
       {/* ── Budget Edit Modal ──────────────────────────────────────────────── */}
       <Modal visible={budgetModalVisible} transparent animationType="slide" onRequestClose={() => setBudgetModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={s.overlay}>
@@ -1021,6 +960,12 @@ export default function FinanceScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <LogExpenseSheet
+        visible={logExpenseVisible}
+        onClose={() => setLogExpenseVisible(false)}
+        onLogged={(tx) => { setTransactions((prev) => [tx, ...prev]); loadData(); }}
+      />
 
       <SmartInputSheet
         visible={smartOpen}
