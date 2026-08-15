@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { SmartInputSheet } from "../../components/SmartInputSheet";
 import { BudgetEditSheet } from "../../components/finance/BudgetEditSheet";
 import { UpdateBalancesSheet } from "../../components/finance/UpdateBalancesSheet";
+import { AddGoalSheet } from "../../components/finance/AddGoalSheet";
+import { AddAccountSheet } from "../../components/finance/AddAccountSheet";
 import {
   View, Text, ScrollView, TouchableOpacity, Modal, TextInput,
   ActivityIndicator, RefreshControl, StyleSheet, SafeAreaView,
@@ -11,8 +13,8 @@ import { Accordion } from "../../components/Accordion";
 import { ProgressBar } from "../../components/ProgressBar";
 import { TransactionRow } from "../../components/TransactionRow";
 import {
-  getFinanceSummary, getTransactions, logExpense, getSavingsGoals, createGoal,
-  deleteTransaction, setBudgetWithType, deleteBudget, getBudgets, getAccounts, createAccount,
+  getFinanceSummary, getTransactions, logExpense, getSavingsGoals,
+  deleteTransaction, setBudgetWithType, deleteBudget, getBudgets, getAccounts,
   getLatestBalances, getMilestones, patchMilestoneActual,
   type CategoryBudget, type Budget, type Transaction, type SavingsGoal,
   type Account, type AccountBalance, type FinancialMilestone,
@@ -129,18 +131,11 @@ export default function FinanceScreen() {
   // Balance update sheet
   const [balanceSheetVisible, setBalanceSheetVisible] = useState(false);
 
-  // Add Goal modal
-  const [goalModalVisible, setGoalModalVisible] = useState(false);
-  const [goalNameInput, setGoalNameInput] = useState("");
-  const [goalAmountInput, setGoalAmountInput] = useState("");
-  const [goalDateInput, setGoalDateInput] = useState("");
-  const [savingGoal, setSavingGoal] = useState(false);
+  // Add Goal sheet
+  const [goalSheetVisible, setGoalSheetVisible] = useState(false);
 
-  // Add Account modal
-  const [accountModalVisible, setAccountModalVisible] = useState(false);
-  const [accountNameInput, setAccountNameInput] = useState("");
-  const [accountTypeInput, setAccountTypeInput] = useState<Account["type"]>("checking");
-  const [savingAccount, setSavingAccount] = useState(false);
+  // Add Account sheet
+  const [accountSheetVisible, setAccountSheetVisible] = useState(false);
 
   const loadData = useCallback(async () => {
     setError(null);
@@ -259,42 +254,6 @@ export default function FinanceScreen() {
 
 
 
-  const handleSaveGoal = async () => {
-    const name = goalNameInput.trim();
-    const amount = parseFloat(goalAmountInput);
-    if (!name) { Alert.alert("Missing name", "Enter a goal name."); return; }
-    if (isNaN(amount) || amount <= 0) { Alert.alert("Invalid amount", "Enter a positive amount."); return; }
-    setSavingGoal(true);
-    try {
-      await createGoal({ name, target_amount: amount, target_date: goalDateInput.trim() || null });
-      setGoalNameInput("");
-      setGoalAmountInput("");
-      setGoalDateInput("");
-      setGoalModalVisible(false);
-      await loadData();
-    } catch (e: any) {
-      Alert.alert("Couldn't save goal", e?.message ?? "Please try again.");
-    } finally {
-      setSavingGoal(false);
-    }
-  };
-
-  const handleSaveAccount = async () => {
-    const name = accountNameInput.trim();
-    if (!name) { Alert.alert("Missing name", "Enter an account name."); return; }
-    setSavingAccount(true);
-    try {
-      await createAccount(name, accountTypeInput);
-      setAccountNameInput("");
-      setAccountTypeInput("checking");
-      setAccountModalVisible(false);
-      await loadData();
-    } catch (e: any) {
-      Alert.alert("Couldn't add account", e?.message ?? "Please try again.");
-    } finally {
-      setSavingAccount(false);
-    }
-  };
 
   // ── derived ──────────────────────────────────────────────────────────────────
 
@@ -520,7 +479,7 @@ export default function FinanceScreen() {
           )}
           <TouchableOpacity
             style={[s.updateBtn, { borderColor: colors.textTertiary, marginTop: 8 }]}
-            onPress={() => setAccountModalVisible(true)}
+            onPress={() => setAccountSheetVisible(true)}
           >
             <Text style={[s.updateBtnText, { color: colors.textTertiary }]}>+ Add Account</Text>
           </TouchableOpacity>
@@ -701,7 +660,7 @@ export default function FinanceScreen() {
           ))}
           <TouchableOpacity
             style={[s.updateBtn, { borderColor: colors.accent, marginTop: 8 }]}
-            onPress={() => setGoalModalVisible(true)}
+            onPress={() => setGoalSheetVisible(true)}
           >
             <Text style={[s.updateBtnText, { color: colors.accent }]}>+ Add Goal</Text>
           </TouchableOpacity>
@@ -800,92 +759,19 @@ export default function FinanceScreen() {
         onClose={() => setBalanceSheetVisible(false)}
         onSaved={(nw) => { setComputedNetWorth(nw); setBalanceSheetVisible(false); loadData(); }}
       />
-      {/* ── Add Goal Modal ────────────────────────────────────────────────── */}
-      <Modal visible={goalModalVisible} transparent animationType="slide" onRequestClose={() => setGoalModalVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={s.overlay}>
-          <View style={[s.sheet, { backgroundColor: colors.card }]}>
-            <Text style={[s.sheetTitle, { color: colors.text }]}>New Savings Goal</Text>
-            <Text style={[s.pickerLabel, { color: colors.textSecondary }]}>Goal name</Text>
-            <TextInput
-              style={[s.input, { backgroundColor: colors.inputBg, color: colors.text, minHeight: 0, marginBottom: 12 }]}
-              value={goalNameInput}
-              onChangeText={setGoalNameInput}
-              placeholder="e.g. Emergency Fund"
-              placeholderTextColor={colors.textTertiary}
-              autoFocus
-            />
-            <Text style={[s.pickerLabel, { color: colors.textSecondary }]}>Target amount ($)</Text>
-            <TextInput
-              style={[s.input, { backgroundColor: colors.inputBg, color: colors.text, minHeight: 0, marginBottom: 12 }]}
-              value={goalAmountInput}
-              onChangeText={setGoalAmountInput}
-              placeholder="e.g. 10000"
-              placeholderTextColor={colors.textTertiary}
-              keyboardType="decimal-pad"
-            />
-            <Text style={[s.pickerLabel, { color: colors.textSecondary }]}>Target date (optional)</Text>
-            <TextInput
-              style={[s.input, { backgroundColor: colors.inputBg, color: colors.text, minHeight: 0, marginBottom: 16 }]}
-              value={goalDateInput}
-              onChangeText={setGoalDateInput}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.textTertiary}
-            />
-            <TouchableOpacity
-              style={[s.submitBtn, { backgroundColor: colors.accent }, savingGoal && s.disabled]}
-              onPress={handleSaveGoal}
-              disabled={savingGoal}
-            >
-              {savingGoal ? <ActivityIndicator color="#fff" /> : <Text style={s.submitText}>Save Goal</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={s.cancelBtn} onPress={() => setGoalModalVisible(false)}>
-              <Text style={[s.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      {/* ── Add Goal Sheet ────────────────────────────────────────────────── */}
+      <AddGoalSheet
+        visible={goalSheetVisible}
+        onClose={() => setGoalSheetVisible(false)}
+        onSaved={() => { setGoalSheetVisible(false); loadData(); }}
+      />
 
-      {/* ── Add Account Modal ─────────────────────────────────────────────── */}
-      <Modal visible={accountModalVisible} transparent animationType="slide" onRequestClose={() => setAccountModalVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={s.overlay}>
-          <View style={[s.sheet, { backgroundColor: colors.card }]}>
-            <Text style={[s.sheetTitle, { color: colors.text }]}>Add Account</Text>
-            <Text style={[s.pickerLabel, { color: colors.textSecondary }]}>Account name</Text>
-            <TextInput
-              style={[s.input, { backgroundColor: colors.inputBg, color: colors.text, minHeight: 0, marginBottom: 12 }]}
-              value={accountNameInput}
-              onChangeText={setAccountNameInput}
-              placeholder="e.g. Fidelity Brokerage"
-              placeholderTextColor={colors.textTertiary}
-              autoFocus
-            />
-            <Text style={[s.pickerLabel, { color: colors.textSecondary }]}>Account type</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
-              <View style={s.pillRow}>
-                {(["checking", "savings", "credit", "brokerage", "investment", "crypto"] as Account["type"][]).map((t) => (
-                  <TouchableOpacity
-                    key={t}
-                    style={[s.pill, { backgroundColor: accountTypeInput === t ? colors.accent : colors.cardElevated }]}
-                    onPress={() => setAccountTypeInput(t)}
-                  >
-                    <Text style={[s.pillText, { color: accountTypeInput === t ? "#fff" : colors.textSecondary }]}>{t}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-            <TouchableOpacity
-              style={[s.submitBtn, { backgroundColor: colors.accent }, savingAccount && s.disabled]}
-              onPress={handleSaveAccount}
-              disabled={savingAccount}
-            >
-              {savingAccount ? <ActivityIndicator color="#fff" /> : <Text style={s.submitText}>Add Account</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={s.cancelBtn} onPress={() => setAccountModalVisible(false)}>
-              <Text style={[s.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      {/* ── Add Account Sheet ─────────────────────────────────────────────── */}
+      <AddAccountSheet
+        visible={accountSheetVisible}
+        onClose={() => setAccountSheetVisible(false)}
+        onSaved={() => { setAccountSheetVisible(false); loadData(); }}
+      />
 
       <SmartInputSheet
         visible={smartOpen}
