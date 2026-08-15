@@ -1,4 +1,8 @@
-# Run: python backend/db/backfill_recipe_servings.py
+"""Backfill serving_grams/serving_label on existing recipes that lack them.
+
+Run: python backend/db/backfill_recipe_servings.py
+Idempotent — only touches recipes WHERE serving_grams IS NULL.
+"""
 import sqlite3, sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db.schema import initialize_schema
@@ -23,28 +27,33 @@ MANUAL_OVERRIDES = {
     "tomato paneer": (200, "1 bowl"),
 }
 
-conn = sqlite3.connect(DB_PATH)
-conn.row_factory = sqlite3.Row
-initialize_schema(conn)
 
-recipes = conn.execute("SELECT id, name FROM recipes WHERE serving_grams IS NULL").fetchall()
-updated = 0
-for r in recipes:
-    name_lower = r["name"].lower()
-    # Check manual overrides first
-    for key, (grams, label) in MANUAL_OVERRIDES.items():
-        if key in name_lower:
-            update_recipe_serving(conn, r["id"], grams, label)
-            print(f"  override: {r['name']} → {label}")
-            updated += 1
-            break
-    else:
-        # Try ingredient DB fuzzy match
-        ing = search_ingredient(conn, name_lower)
-        if ing:
-            update_recipe_serving(conn, r["id"], 100, "100g")
-            print(f"  matched: {r['name']} → 100g ({ing['name']})")
-            updated += 1
+def backfill(db_path: str = DB_PATH) -> int:
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    initialize_schema(conn)
 
-conn.close()
-print(f"Updated {updated} / {len(recipes)} recipes")
+    recipes = conn.execute("SELECT id, name FROM recipes WHERE serving_grams IS NULL").fetchall()
+    updated = 0
+    for r in recipes:
+        name_lower = r["name"].lower()
+        for key, (grams, label) in MANUAL_OVERRIDES.items():
+            if key in name_lower:
+                update_recipe_serving(conn, r["id"], grams, label)
+                print(f"  override: {r['name']} → {label}")
+                updated += 1
+                break
+        else:
+            ing = search_ingredient(conn, name_lower)
+            if ing:
+                update_recipe_serving(conn, r["id"], 100, "100g")
+                print(f"  matched: {r['name']} → 100g ({ing['name']})")
+                updated += 1
+
+    conn.close()
+    print(f"Updated {updated} / {len(recipes)} recipes")
+    return updated
+
+
+if __name__ == "__main__":
+    backfill()
