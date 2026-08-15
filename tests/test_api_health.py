@@ -146,3 +146,51 @@ def test_log_from_recipe_not_found(monkeypatch):
                     json={"recipe_id": 99999},
                     headers={"x-api-key": "testkey"})
     assert r.status_code == 404
+
+
+def test_recipe_has_serving_fields(monkeypatch):
+    monkeypatch.setenv("API_KEY", "testkey")
+    import importlib, config, auth
+    importlib.reload(config)
+    monkeypatch.setattr(auth, "API_KEY", "testkey")
+    # create a recipe with serving info
+    resp = client.post("/health/recipes", json={
+        "name": "Oats bowl",
+        "calories": 300,
+        "protein": 10.0,
+        "fat": 5.0,
+        "carbs": 50.0,
+        "serving_grams": 80,
+        "serving_label": "1 cup dry",
+    }, headers={"x-api-key": "testkey"})
+    assert resp.status_code == 200
+    rid = resp.json()["id"]
+    recipes = client.get("/health/recipes", headers={"x-api-key": "testkey"}).json()
+    recipe = next(r for r in recipes if r["id"] == rid)
+    assert recipe["serving_grams"] == 80
+    assert recipe["serving_label"] == "1 cup dry"
+
+
+def test_log_from_recipe_with_multiplier(monkeypatch):
+    monkeypatch.setenv("API_KEY", "testkey")
+    import importlib, config, auth
+    importlib.reload(config)
+    monkeypatch.setattr(auth, "API_KEY", "testkey")
+    resp = client.post("/health/recipes", json={
+        "name": "Test recipe",
+        "calories": 400,
+        "protein": 30.0,
+        "fat": 10.0,
+        "carbs": 40.0,
+    }, headers={"x-api-key": "testkey"})
+    rid = resp.json()["id"]
+    log_resp = client.post("/health/meals/from-recipe", json={
+        "recipe_id": rid,
+        "multiplier": 0.5,
+    }, headers={"x-api-key": "testkey"})
+    assert log_resp.status_code == 200
+    # Check the logged meal has halved calories
+    meals = client.get("/health/meals/today", headers={"x-api-key": "testkey"}).json()["meals"]
+    logged = next((m for m in meals if m.get("recipe_id") == rid), None)
+    assert logged is not None
+    assert logged["calories"] == 200  # 400 * 0.5

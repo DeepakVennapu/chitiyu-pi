@@ -35,6 +35,8 @@ class RecipeCreate(BaseModel):
     fat: float | None = None
     carbs: float | None = None
     serving_unit: str | None = None
+    serving_grams: int | None = None
+    serving_label: str | None = None
 
 
 class HealthSync(BaseModel):
@@ -55,6 +57,8 @@ class MealPreview(BaseModel):
 class MealFromRecipe(BaseModel):
     user_id: int = 1
     recipe_id: int
+    logged_at: str | None = None
+    multiplier: float = 1.0
 
 
 class MealLogParsed(BaseModel):
@@ -104,7 +108,8 @@ def preview_meal(body: MealPreview):
 def log_from_recipe(body: MealFromRecipe):
     conn = _conn()
     try:
-        recipe = log_meal_from_recipe(conn, body.user_id, body.recipe_id)
+        recipe = log_meal_from_recipe(conn, body.user_id, body.recipe_id,
+                                      body.logged_at, body.multiplier)
     finally:
         conn.close()
     if recipe is None:
@@ -179,7 +184,8 @@ def list_recipes(user_id: int = 1):
 def create_recipe(body: RecipeCreate):
     conn = _conn()
     recipe_id = insert_recipe(conn, body.user_id, body.name, body.calories,
-                              body.protein, body.fat, body.carbs, body.serving_unit)
+                              body.protein, body.fat, body.carbs, body.serving_unit,
+                              body.serving_grams, body.serving_label)
     conn.close()
     return {"id": recipe_id, "name": body.name}
 

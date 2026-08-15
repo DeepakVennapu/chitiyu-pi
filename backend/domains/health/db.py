@@ -65,11 +65,13 @@ def get_metrics_for_date(conn: sqlite3.Connection, user_id: int, date: str) -> d
 
 def insert_recipe(conn: sqlite3.Connection, user_id: int, name: str, calories: int,
                   protein: float, fat: float | None, carbs: float | None,
-                  serving_unit: str | None = None) -> int:
+                  serving_unit: str | None = None,
+                  serving_grams: int | None = None,
+                  serving_label: str | None = None) -> int:
     cur = conn.execute(
-        "INSERT INTO recipes(user_id, name, calories, protein, fat, carbs, serving_unit) "
-        "VALUES (?,?,?,?,?,?,?)",
-        (user_id, name, calories, protein, fat, carbs, serving_unit)
+        "INSERT INTO recipes(user_id, name, calories, protein, fat, carbs, serving_unit, serving_grams, serving_label) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        (user_id, name, calories, protein, fat, carbs, serving_unit, serving_grams, serving_label)
     )
     conn.commit()
     return cur.lastrowid
@@ -98,7 +100,8 @@ def delete_recipe(conn: sqlite3.Connection, user_id: int, recipe_id: int) -> boo
 
 
 def log_meal_from_recipe(conn: sqlite3.Connection, user_id: int, recipe_id: int,
-                         logged_at: str | None = None) -> dict | None:
+                         logged_at: str | None = None,
+                         multiplier: float = 1.0) -> dict | None:
     """Fetch recipe and insert a meal row. Returns the meal dict or None if recipe not found."""
     row = conn.execute(
         "SELECT * FROM recipes WHERE id=? AND user_id=?", (recipe_id, user_id)
@@ -107,14 +110,17 @@ def log_meal_from_recipe(conn: sqlite3.Connection, user_id: int, recipe_id: int,
         return None
     recipe = dict(row)
     ts = _to_local_ts(logged_at) if logged_at else _local_now().strftime("%Y-%m-%d %H:%M:%S")
+    cal = round(recipe["calories"] * multiplier)
+    pro = round(recipe["protein"] * multiplier, 1)
+    fat = round(recipe.get("fat") * multiplier, 1) if recipe.get("fat") is not None else None
+    carbs = round(recipe.get("carbs") * multiplier, 1) if recipe.get("carbs") is not None else None
     conn.execute(
         "INSERT INTO meals(user_id, description, calories, protein, fat, carbs, source, recipe_id, logged_at) "
         "VALUES (?,?,?,?,?,?,?,?,?)",
-        (user_id, recipe["name"], recipe["calories"], recipe["protein"],
-         recipe.get("fat"), recipe.get("carbs"), "recipe", recipe_id, ts)
+        (user_id, recipe["name"], cal, pro, fat, carbs, "recipe", recipe_id, ts)
     )
     conn.commit()
-    return recipe
+    return {**recipe, "calories": cal, "protein": pro, "fat": fat, "carbs": carbs}
 
 
 def upsert_weight_log(conn: sqlite3.Connection, user_id: int, date: str,

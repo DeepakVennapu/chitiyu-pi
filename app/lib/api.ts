@@ -121,6 +121,8 @@ export interface Recipe {
   fat: number | null;
   carbs: number | null;
   serving_unit: string | null;
+  serving_grams: number | null;
+  serving_label: string | null;
 }
 
 export const deleteMeal = (id: number) =>
@@ -129,8 +131,12 @@ export const deleteMeal = (id: number) =>
 export const getMealPreview = (text: string) =>
   request<MealPreviewResult>("POST", "/health/meals/preview", { text });
 
-export const logMealFromRecipe = (recipeId: number) =>
-  request<{ result: string }>("POST", "/health/meals/from-recipe", { recipe_id: recipeId });
+export const logMealFromRecipe = (recipeId: number, loggedAt?: string, multiplier: number = 1.0) =>
+  request<{ result: string }>("POST", "/health/meals/from-recipe", {
+    recipe_id: recipeId,
+    logged_at: loggedAt ?? null,
+    multiplier,
+  });
 
 export const logMealParsed = (data: MealPreviewResult, loggedAt?: string) =>
   request<LogMealResponse>("POST", "/health/meals/log-parsed", {
@@ -145,8 +151,16 @@ export const logMealParsed = (data: MealPreviewResult, loggedAt?: string) =>
 export const getRecipes = () =>
   request<Recipe[]>("GET", "/health/recipes");
 
-export const createRecipe = (name: string, calories: number, protein: number, fat?: number, carbs?: number) =>
-  request<{ id: number; name: string }>("POST", "/health/recipes", { name, calories, protein, fat, carbs });
+export const createRecipe = (
+  name: string, calories: number, protein: number,
+  fat?: number, carbs?: number,
+  servingGrams?: number, servingLabel?: string
+) =>
+  request<{ id: number; name: string }>("POST", "/health/recipes", {
+    name, calories, protein, fat, carbs,
+    serving_grams: servingGrams ?? null,
+    serving_label: servingLabel ?? null,
+  });
 
 // ─── Finance ──────────────────────────────────────────────────────────────────
 
