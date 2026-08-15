@@ -152,3 +152,51 @@ def get_latest_weight(conn: sqlite3.Connection, user_id: int) -> dict | None:
         (user_id,)
     ).fetchone()
     return dict(row) if row else None
+
+
+def insert_ingredient(conn: sqlite3.Connection, name: str,
+                      calories_per_100g: float, protein_per_100g: float,
+                      fat_per_100g: float, carbs_per_100g: float,
+                      category: str = "other") -> int:
+    cur = conn.execute(
+        """INSERT INTO ingredients(name, name_lower, calories_per_100g, protein_per_100g,
+                                   fat_per_100g, carbs_per_100g, category)
+           VALUES (?,?,?,?,?,?,?)
+           ON CONFLICT(name_lower) DO UPDATE SET
+               calories_per_100g=excluded.calories_per_100g,
+               protein_per_100g=excluded.protein_per_100g,
+               fat_per_100g=excluded.fat_per_100g,
+               carbs_per_100g=excluded.carbs_per_100g,
+               category=excluded.category""",
+        (name, name.lower(), calories_per_100g, protein_per_100g,
+         fat_per_100g, carbs_per_100g, category)
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def search_ingredient(conn: sqlite3.Connection, query: str) -> dict | None:
+    q = query.lower().strip()
+    # Exact match first
+    row = conn.execute(
+        "SELECT * FROM ingredients WHERE name_lower=?", (q,)
+    ).fetchone()
+    if row:
+        return dict(row)
+    # Partial: all words in query must appear in name
+    words = q.split()
+    like_clause = " AND ".join("name_lower LIKE ?" for _ in words)
+    params = [f"%{w}%" for w in words]
+    row = conn.execute(
+        f"SELECT * FROM ingredients WHERE {like_clause} LIMIT 1", params
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def update_recipe_serving(conn: sqlite3.Connection, recipe_id: int,
+                           serving_grams: int, serving_label: str) -> None:
+    conn.execute(
+        "UPDATE recipes SET serving_grams=?, serving_label=? WHERE id=?",
+        (serving_grams, serving_label, recipe_id)
+    )
+    conn.commit()
