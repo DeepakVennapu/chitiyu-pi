@@ -79,3 +79,24 @@ def test_get_latest_weight(conn, user_id):
 
 def test_get_latest_weight_none(conn, user_id):
     assert get_latest_weight(conn, user_id) is None
+
+
+def test_format_today_summary_includes_weight():
+    from domains.health.formatter import format_today_summary
+    weight = {"weight_kg": 84.6, "weight_lbs": 186.5, "bodyfat_pct": 16.1, "date": "2026-08-15"}
+    result = format_today_summary([], None, weight=weight)
+    assert "186.5 lbs" in result
+    assert "16.1%" in result
+
+
+def test_format_today_summary_no_weight():
+    from domains.health.formatter import format_today_summary
+    result = format_today_summary([], None, weight=None)
+    assert "lbs" not in result  # no weight line when not provided
+
+
+def test_format_today_summary_weight_no_bodyfat():
+    from domains.health.formatter import format_today_summary
+    weight = {"weight_kg": 84.6, "weight_lbs": 186.5, "bodyfat_pct": None, "date": "2026-08-15"}
+    result = format_today_summary([], None, weight=weight)
+    assert "186.5 lbs" in result

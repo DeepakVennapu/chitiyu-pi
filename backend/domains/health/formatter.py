@@ -5,7 +5,7 @@ def _pct(val, target):
     return f"{int(val/target*100)}%" if target else "—"
 
 
-def format_today_summary(meals: list, metrics: dict | None) -> str:
+def format_today_summary(meals: list, metrics: dict | None, weight: dict | None = None) -> str:
     totals = {"calories": 0, "protein": 0.0, "fat": 0.0, "carbs": 0.0}
     for m in meals:
         totals["calories"] += m["calories"] or 0
@@ -26,6 +26,11 @@ def format_today_summary(meals: list, metrics: dict | None) -> str:
         lines.append(f"\nSteps: {metrics.get('steps','—')} / 10,000")
         lines.append(f"Deep sleep: {metrics.get('sleep_deep_mins','—')} min / 60 target")
         lines.append(f"Resting HR: {metrics.get('resting_hr','—')} bpm")
+    if weight:
+        weight_line = f"\nWeight: {weight['weight_lbs']} lbs ({weight['weight_kg']} kg)"
+        if weight.get("bodyfat_pct") is not None:
+            weight_line += f" — {weight['bodyfat_pct']}% body fat"
+        lines.append(weight_line)
     return "\n".join(lines)
 
 
