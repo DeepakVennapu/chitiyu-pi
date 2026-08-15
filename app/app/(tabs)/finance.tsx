@@ -10,42 +10,20 @@ import { ProgressBar } from "../../components/ProgressBar";
 import { TransactionRow } from "../../components/TransactionRow";
 import {
   getFinanceSummary, getTransactions, logExpense, getSavingsGoals, createGoal,
-  deleteTransaction, setBudgetWithType, getAccounts, createAccount, getLatestBalances,
-  updateBalances, getMilestones,
+  deleteTransaction, setBudgetWithType, deleteBudget, getBudgets, getAccounts, createAccount,
+  getLatestBalances, updateBalances, getMilestones, patchMilestoneActual,
   type CategoryBudget, type Budget, type Transaction, type SavingsGoal,
   type Account, type AccountBalance, type BalanceEntry, type FinancialMilestone,
 } from "../../lib/api";
 import { useTheme } from "../../lib/theme";
 import { todayLocal } from "../../lib/dateUtils";
+import { fmt, fmtFull, accountTypeOrder, groupBalancesByType } from "../../lib/financeUtils";
 
 const EXPENSE_CATEGORIES = ["groceries", "dining", "fuel", "shopping", "misc", "home", "travel", "insurance", "gifts", "other"];
 
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-const fmt = (n: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
-
-const fmtFull = (n: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
-
-function accountTypeOrder(type: string): number {
-  return { checking: 0, savings: 1, brokerage: 2, investment: 3, crypto: 4, credit: 5 }[type] ?? 9;
-}
-
-function groupBalancesByType(balances: AccountBalance[], accounts: Account[]) {
-  const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a]));
-  const groups: Record<string, AccountBalance[]> = {};
-  for (const b of balances) {
-    const type = accountMap[b.account_id]?.type ?? b.account_type;
-    if (!groups[type]) groups[type] = [];
-    groups[type].push(b);
-  }
-  return groups;
-}
-
 // ── sub-components ────────────────────────────────────────────────────────────
 
-function MilestoneRow({ m }: { m: FinancialMilestone }) {
+function MilestoneRow({ m, onConfirm }: { m: FinancialMilestone; onConfirm: (m: FinancialMilestone) => void }) {
   const { colors } = useTheme();
   const date = new Date(m.target_date + "T00:00:00");
   const label = date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -73,8 +51,15 @@ function MilestoneRow({ m }: { m: FinancialMilestone }) {
               {ahead ? "+" : ""}{fmt(m.actual_net_worth! - m.expected_net_worth)}
             </Text>
           </>
+        ) : isPast ? (
+          <TouchableOpacity
+            style={[ms.confirmBtn, { backgroundColor: colors.accent + "22", borderColor: colors.accent }]}
+            onPress={() => onConfirm(m)}
+          >
+            <Text style={[ms.confirmText, { color: colors.accent }]}>Confirm</Text>
+          </TouchableOpacity>
         ) : (
-          <Text style={[ms.pending, { color: colors.textTertiary }]}>—</Text>
+          <Text style={[ms.pending, { color: colors.textTertiary }]}>upcoming</Text>
         )}
       </View>
     </View>
@@ -90,7 +75,9 @@ const ms = StyleSheet.create({
   right: { alignItems: "flex-end" },
   actual: { fontSize: 14, fontWeight: "600" },
   delta: { fontSize: 11, marginTop: 1 },
-  pending: { fontSize: 14 },
+  pending: { fontSize: 12, color: "#999" },
+  confirmBtn: { borderRadius: 6, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4 },
+  confirmText: { fontSize: 12, fontWeight: "600" },
 });
 
 // ── main screen ───────────────────────────────────────────────────────────────
@@ -98,9 +85,13 @@ const ms = StyleSheet.create({
 export default function FinanceScreen() {
   const { colors } = useTheme();
   const now = new Date();
-  const monthName = now.toLocaleDateString("en-US", { month: "long" });
+  const [summaryYear, setSummaryYear] = useState(now.getFullYear());
+  const [summaryMonth, setSummaryMonth] = useState(now.getMonth() + 1);
+  const isCurrentMonth = summaryYear === now.getFullYear() && summaryMonth === now.getMonth() + 1;
+  const monthName = new Date(summaryYear, summaryMonth - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
   const [summary, setSummary] = useState<import("../../lib/api").FinanceSummary | null>(null);
+  const [budgetList, setBudgetList] = useState<Budget[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [goals, setGoals] = useState<SavingsGoal[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -124,6 +115,7 @@ export default function FinanceScreen() {
 
   // Budget edit modal
   const [budgetModalVisible, setBudgetModalVisible] = useState(false);
+  const [editingBudgetId, setEditingBudgetId] = useState<number | null>(null);
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [editingSpend, setEditingSpend] = useState<number | null>(null);
   const [editingBudgetType, setEditingBudgetType] = useState<Budget["budget_type"]>("discretionary");
@@ -154,14 +146,15 @@ export default function FinanceScreen() {
   const loadData = useCallback(async () => {
     setError(null);
     try {
-      const [sumData, txData, goalsData, accountsData, balancesData, milestonesData] =
+      const [sumData, txData, goalsData, accountsData, balancesData, milestonesData, budgetsData] =
         await Promise.all([
-          getFinanceSummary(now.getFullYear(), now.getMonth() + 1),
+          getFinanceSummary(summaryYear, summaryMonth),
           getTransactions(),
           getSavingsGoals(),
           getAccounts(),
           getLatestBalances(),
           getMilestones(),
+          getBudgets(),
         ]);
       setSummary(sumData);
       setTransactions(txData.transactions.slice(0, 20));
@@ -171,13 +164,14 @@ export default function FinanceScreen() {
       setComputedNetWorth(balancesData.computed_net_worth);
       setMilestonePeriods(milestonesData.periods);
       setMilestones(milestonesData.milestones);
+      setBudgetList(budgetsData);
     } catch (e: any) {
       setError(e?.message ?? "Failed to load finance data");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [summaryYear, summaryMonth]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -188,6 +182,52 @@ export default function FinanceScreen() {
   }, [milestonePeriods]);
 
   const handleRefresh = () => { setRefreshing(true); loadData(); };
+
+  const shiftMonth = (delta: number) => {
+    let m = summaryMonth + delta;
+    let y = summaryYear;
+    if (m > 12) { m = 1; y += 1; }
+    if (m < 1) { m = 12; y -= 1; }
+    setSummaryMonth(m);
+    setSummaryYear(y);
+  };
+
+  const handleDeleteBudget = (id: number, category: string) => {
+    Alert.alert("Delete budget?", `Remove budget for "${category}"?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete", style: "destructive", onPress: async () => {
+          try {
+            await deleteBudget(id);
+            await loadData();
+          } catch (e: any) {
+            Alert.alert("Couldn't delete budget", e?.message ?? "Please try again.");
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleConfirmMilestone = (m: FinancialMilestone) => {
+    const defaultVal = m.current_balance != null ? String(Math.round(m.current_balance)) : "";
+    Alert.prompt(
+      "Confirm Chase balance",
+      `Enter actual Chase Checking balance for ${m.target_date}:`,
+      async (val) => {
+        const amount = parseFloat(val ?? "");
+        if (isNaN(amount)) return;
+        try {
+          await patchMilestoneActual(m.target_date, amount);
+          await loadData();
+        } catch (e: any) {
+          Alert.alert("Couldn't save", e?.message ?? "Please try again.");
+        }
+      },
+      "plain-text",
+      defaultVal,
+      "decimal-pad"
+    );
+  };
 
   const handleLogExpense = async () => {
     if (!expenseInput.trim()) return;
@@ -220,11 +260,15 @@ export default function FinanceScreen() {
     const catData = summary?.categories.find(
       (c) => c.category.toLowerCase() === category.toLowerCase()
     );
+    const budgetRow = budgetList.find(
+      (b) => b.category.toLowerCase() === category.toLowerCase()
+    );
     setBudgetInput(catData?.budget != null ? String(catData.budget) : "");
     setEditingSpend(catData?.spent ?? null);
     setEditingBudgetType(catData?.budget_type ?? "discretionary");
     setEditingPeriod(catData?.period ?? "monthly");
     setEditingCategory(category || null);
+    setEditingBudgetId(budgetRow?.id ?? null);
     setNewCategoryInput("");
     setBudgetModalVisible(true);
   };
@@ -290,7 +334,7 @@ export default function FinanceScreen() {
     if (isNaN(amount) || amount <= 0) { Alert.alert("Invalid amount", "Enter a positive amount."); return; }
     setSavingGoal(true);
     try {
-      await createGoal({ name, target_amount: amount, target_date: goalDateInput.trim() || undefined });
+      await createGoal({ name, target_amount: amount, target_date: goalDateInput.trim() || null });
       setGoalNameInput("");
       setGoalAmountInput("");
       setGoalDateInput("");
@@ -367,9 +411,25 @@ export default function FinanceScreen() {
         {/* ── HERO ───────────────────────────────────────────────────────── */}
         {summary && (
           <View style={[s.hero, { backgroundColor: colors.card }]}>
+            {/* Month navigator */}
+            <View style={s.monthNav}>
+              <TouchableOpacity onPress={() => shiftMonth(-1)} style={s.monthArrow}>
+                <Text style={[s.monthArrowText, { color: colors.accent }]}>‹</Text>
+              </TouchableOpacity>
+              <Text style={[s.monthNavLabel, { color: colors.textSecondary }]}>
+                {monthName.toUpperCase()}
+              </Text>
+              <TouchableOpacity
+                onPress={() => shiftMonth(1)}
+                style={s.monthArrow}
+                disabled={isCurrentMonth}
+              >
+                <Text style={[s.monthArrowText, { color: isCurrentMonth ? colors.textTertiary : colors.accent }]}>›</Text>
+              </TouchableOpacity>
+            </View>
             {/* Part 1: Discretionary spend */}
             <Text style={[s.heroLabel, { color: colors.textSecondary }]}>
-              DISCRETIONARY — {monthName.toUpperCase()}
+              DISCRETIONARY
             </Text>
             <View style={s.heroRow}>
               <View>
@@ -461,6 +521,30 @@ export default function FinanceScreen() {
           </View>
         )}
 
+        {/* ── SAVINGS TIMELINE ────────────────────────────────────────────── */}
+        {milestones.length > 0 && (
+          <Accordion title="Savings Timeline" defaultOpen>
+            {milestonePeriods.length > 1 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                <View style={s.pillRow}>
+                  {milestonePeriods.map((p) => (
+                    <TouchableOpacity
+                      key={p}
+                      style={[s.pill, { backgroundColor: selectedPeriod === p ? colors.accent : colors.cardElevated }]}
+                      onPress={() => setSelectedPeriod(p)}
+                    >
+                      <Text style={[s.pillText, { color: selectedPeriod === p ? "#fff" : colors.textSecondary }]}>{p}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            )}
+            {filteredMilestones.map((m) => (
+              <MilestoneRow key={m.id} m={m} onConfirm={handleConfirmMilestone} />
+            ))}
+          </Accordion>
+        )}
+
         {/* ── ACCOUNTS ────────────────────────────────────────────────────── */}
         <Accordion
           title="Accounts"
@@ -513,39 +597,42 @@ export default function FinanceScreen() {
         {/* ── DISCRETIONARY ────────────────────────────────────────────── */}
         <Accordion
           title="Discretionary"
-          badge={summary ? `${fmt(summary.discretionary_spent)} spent` : undefined}
+          badge={summary ? `${fmt(summary.discretionary_spent)} / ${fmt(summary.discretionary_budget)}` : undefined}
           defaultOpen
         >
           {summary && summary.by_type.discretionary.length === 0 && (
             <Text style={[s.emptyHint, { color: colors.textSecondary }]}>No discretionary budgets set.</Text>
           )}
-          {summary && summary.by_type.discretionary.map((cat) => (
-            <TouchableOpacity
-              key={cat.category}
-              style={[s.catRow, { borderBottomColor: colors.border }]}
-              onPress={() => openBudgetEdit(cat.category)}
-            >
-              <Text style={[s.catName, { color: colors.text }]}>
-                {cat.category.charAt(0).toUpperCase() + cat.category.slice(1)}
-              </Text>
-              <View style={s.catRight}>
-                <Text style={[s.catAmount, { color: cat.over_budget ? colors.accentRed : colors.text }]}>
-                  {fmt(cat.spent)}
-                  {cat.budget != null && (
-                    <Text style={{ color: colors.textSecondary, fontWeight: "400" }}>
-                      {" "}/ {fmt(cat.budget)}
+          {summary && summary.by_type.discretionary.map((cat) => {
+            const budgetId = summary.categories.find(c => c.category === cat.category) as any;
+            return (
+              <View key={cat.category} style={[s.catRow, { borderBottomColor: colors.border }]}>
+                <TouchableOpacity style={{ flex: 1 }} onPress={() => openBudgetEdit(cat.category)}>
+                  <Text style={[s.catName, { color: colors.text }]}>
+                    {cat.category.charAt(0).toUpperCase() + cat.category.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+                <View style={s.catRight}>
+                  <TouchableOpacity onPress={() => openBudgetEdit(cat.category)}>
+                    <Text style={[s.catAmount, { color: cat.over_budget ? colors.accentRed : colors.text }]}>
+                      {fmt(cat.spent)}
+                      {cat.budget != null && (
+                        <Text style={{ color: colors.textSecondary, fontWeight: "400" }}>
+                          {" "}/ {fmt(cat.budget)}
+                        </Text>
+                      )}
                     </Text>
+                  </TouchableOpacity>
+                  {cat.over_budget && (
+                    <View style={[s.overTag, { backgroundColor: colors.accentRed + "22" }]}>
+                      <Text style={[s.overTagText, { color: colors.accentRed }]}>OVER</Text>
+                    </View>
                   )}
-                </Text>
-                {cat.over_budget && (
-                  <View style={[s.overTag, { backgroundColor: colors.accentRed + "22" }]}>
-                    <Text style={[s.overTagText, { color: colors.accentRed }]}>OVER</Text>
-                  </View>
-                )}
-                <Text style={{ color: colors.textTertiary, fontSize: 12 }}>›</Text>
+                  <Text style={{ color: colors.textTertiary, fontSize: 12 }}>›</Text>
+                </View>
               </View>
-            </TouchableOpacity>
-          ))}
+            );
+          })}
           <TouchableOpacity
             style={[s.updateBtn, { borderColor: colors.accent, marginTop: 8 }]}
             onPress={() => openBudgetEdit("")}
@@ -604,7 +691,7 @@ export default function FinanceScreen() {
             title="Fixed"
             defaultOpen={false}
             badge={summary.by_type.fixed.reduce((sum, c) => sum + (c.budget ?? 0), 0) > 0
-              ? fmt(summary.by_type.fixed.reduce((sum, c) => sum + (c.budget ?? 0), 0))
+              ? fmt(summary.by_type.fixed.reduce((sum, c) => sum + (c.budget ?? 0), 0)) + "/mo"
               : undefined}
           >
             {summary.by_type.fixed.map((cat) => (
@@ -640,30 +727,6 @@ export default function FinanceScreen() {
                   {cat.budget != null ? fmt(cat.budget) : "—"}/mo
                 </Text>
               </TouchableOpacity>
-            ))}
-          </Accordion>
-        )}
-
-        {/* ── SAVINGS TIMELINE ────────────────────────────────────────────── */}
-        {milestones.length > 0 && (
-          <Accordion title="Savings Timeline" defaultOpen={false}>
-            {milestonePeriods.length > 1 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                <View style={s.pillRow}>
-                  {milestonePeriods.map((p) => (
-                    <TouchableOpacity
-                      key={p}
-                      style={[s.pill, { backgroundColor: selectedPeriod === p ? colors.accent : colors.cardElevated }]}
-                      onPress={() => setSelectedPeriod(p)}
-                    >
-                      <Text style={[s.pillText, { color: selectedPeriod === p ? "#fff" : colors.textSecondary }]}>{p}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
-            )}
-            {filteredMilestones.map((m) => (
-              <MilestoneRow key={m.id} m={m} />
             ))}
           </Accordion>
         )}
@@ -728,10 +791,10 @@ export default function FinanceScreen() {
       {/* ── Floating action row ────────────────────────────────────────────── */}
       <View style={[s.fabRow, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
         <TouchableOpacity
-          style={[s.fab, { backgroundColor: colors.cardElevated }]}
+          style={[s.fab, { backgroundColor: colors.accentGreen + "22", borderWidth: 1, borderColor: colors.accentGreen }]}
           onPress={() => setSmartOpen(true)}
         >
-          <Text style={[s.fabText, { color: colors.accent }]}>+ Log Expense</Text>
+          <Text style={[s.fabText, { color: colors.accentGreen }]}>+ Log Expense</Text>
         </TouchableOpacity>
         {accounts.length > 0 && (
           <TouchableOpacity
@@ -861,6 +924,17 @@ export default function FinanceScreen() {
             >
               {savingBudget ? <ActivityIndicator color="#fff" /> : <Text style={s.submitText}>Save Limit</Text>}
             </TouchableOpacity>
+            {editingBudgetId != null && (
+              <TouchableOpacity
+                style={s.cancelBtn}
+                onPress={() => {
+                  setBudgetModalVisible(false);
+                  handleDeleteBudget(editingBudgetId!, editingCategory!);
+                }}
+              >
+                <Text style={[s.cancelText, { color: colors.accentRed }]}>Delete Budget</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={s.cancelBtn} onPress={() => setBudgetModalVisible(false)}>
               <Text style={[s.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
             </TouchableOpacity>
@@ -1019,6 +1093,11 @@ export default function FinanceScreen() {
 const s = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { padding: 16, paddingBottom: 100 },
+  // Month nav
+  monthNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 },
+  monthArrow: { padding: 4 },
+  monthArrowText: { fontSize: 22, fontWeight: "600" },
+  monthNavLabel: { fontSize: 12, fontWeight: "600", letterSpacing: 0.8 },
   // Hero
   hero: { borderRadius: 12, padding: 20, marginBottom: 12 },
   heroLabel: { fontSize: 11, fontWeight: "600", letterSpacing: 1, marginBottom: 8 },
@@ -1058,8 +1137,8 @@ const s = StyleSheet.create({
   pillRow: { flexDirection: "row", gap: 8 },
   pill: { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
   pillText: { fontSize: 14, fontWeight: "500" },
-  // FAB row
-  fabRow: { flexDirection: "row", gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  // FAB row — paddingRight leaves room for the global FAB (56px + 20px margin + 10px gap)
+  fabRow: { flexDirection: "row", gap: 10, paddingHorizontal: 16, paddingVertical: 12, paddingRight: 92, borderTopWidth: StyleSheet.hairlineWidth },
   fab: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
   fabText: { fontSize: 15, fontWeight: "600" },
   // Primary button (inside lists)
