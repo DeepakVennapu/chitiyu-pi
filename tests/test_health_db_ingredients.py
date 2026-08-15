@@ -54,3 +54,13 @@ def test_update_recipe_serving():
     row = conn.execute("SELECT serving_grams, serving_label FROM recipes WHERE id=?", (rid,)).fetchone()
     assert row["serving_grams"] == 80
     assert row["serving_label"] == "1 cup dry"
+
+
+def test_seed_is_idempotent():
+    conn = make_conn()
+    # Can't use DB_PATH in tests — seed into in-memory conn by calling insert_ingredient directly
+    insert_ingredient(conn, "Oats dry", 389, 17.0, 7.0, 66.0, "grain")
+    # Run again — should not raise
+    insert_ingredient(conn, "Oats dry", 389, 17.0, 7.0, 66.0, "grain")
+    rows = conn.execute("SELECT count(*) as n FROM ingredients WHERE name_lower='oats dry'").fetchone()
+    assert rows["n"] == 1
