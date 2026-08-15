@@ -6,7 +6,7 @@ from db.schema import initialize_schema
 from config import DB_PATH
 from domains.health.db import (get_today_meals, get_meals_for_date, get_metrics_for_date,
                                upsert_health_metrics, insert_recipe, get_all_recipes, delete_meal,
-                               log_meal_from_recipe)
+                               delete_recipe, log_meal_from_recipe, get_latest_weight, get_weight_logs)
 from domains.health.formatter import format_today_summary
 from datetime import datetime, timezone
 from domains.health.db import _today_local
@@ -55,6 +55,7 @@ class MealPreview(BaseModel):
 class MealFromRecipe(BaseModel):
     user_id: int = 1
     recipe_id: int
+    logged_at: str | None = None  # ISO 8601 — if omitted, defaults to now
 
 
 class MealLogParsed(BaseModel):
@@ -100,7 +101,7 @@ def preview_meal(body: MealPreview):
 def log_from_recipe(body: MealFromRecipe):
     conn = _conn()
     try:
-        recipe = log_meal_from_recipe(conn, body.user_id, body.recipe_id)
+        recipe = log_meal_from_recipe(conn, body.user_id, body.recipe_id, body.logged_at)
     finally:
         conn.close()
     if recipe is None:
@@ -171,6 +172,16 @@ def list_recipes(user_id: int = 1):
     return recipes
 
 
+@router.delete("/recipes/{recipe_id}")
+def delete_recipe_endpoint(recipe_id: int, user_id: int = 1):
+    conn = _conn()
+    ok = delete_recipe(conn, user_id, recipe_id)
+    conn.close()
+    if not ok:
+        raise HTTPException(404, "Recipe not found")
+    return {"ok": True}
+
+
 @router.post("/recipes")
 def create_recipe(body: RecipeCreate):
     conn = _conn()
@@ -235,7 +246,7 @@ def health_insights_context(user_id: int = 1, days: int = 7):
 
         targets = {
             "kcal": 1500,
-            "protein_g": 150,
+            "protein_g": 155,
             "steps": 10000,
             "sleep_deep_mins": 60,
         }
@@ -268,3 +279,27 @@ def health_insights_context(user_id: int = 1, days: int = 7):
         }
     finally:
         conn.close()
+
+
+@router.get("/weight/latest")
+def weight_latest(user_id: int = 1):
+    conn = _conn()
+    row = get_latest_weight(conn, user_id)
+    conn.close()
+    if not row:
+        return {}
+    row["weight_lbs"] = round(row["weight_kg"] * 2.20462, 1)
+    return row
+
+
+@router.get("/weight/trend")
+def weight_trend(user_id: int = 1, days: int = 7):
+    conn = _conn()
+    logs = get_weight_logs(conn, user_id, days=days)
+    conn.close()
+    for log in logs:
+        log["weight_lbs"] = round(log["weight_kg"] * 2.20462, 1)
+    weights = [l["weight_kg"] for l in logs]
+    avg = round(sum(weights) / len(weights), 1) if weights else None
+    delta = round(weights[-1] - weights[0], 1) if len(weights) >= 2 else None
+    return {"logs": logs, "avg_weight_kg": avg, "delta_kg": delta}
