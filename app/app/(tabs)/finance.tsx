@@ -1,88 +1,27 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { SmartInputSheet } from "../../components/SmartInputSheet";
+import { LogExpenseSheet } from "../../components/finance/LogExpenseSheet";
 import { BudgetEditSheet } from "../../components/finance/BudgetEditSheet";
 import { UpdateBalancesSheet } from "../../components/finance/UpdateBalancesSheet";
 import { AddGoalSheet } from "../../components/finance/AddGoalSheet";
 import { AddAccountSheet } from "../../components/finance/AddAccountSheet";
 import {
-  View, Text, ScrollView, TouchableOpacity, Modal, TextInput,
-  ActivityIndicator, RefreshControl, StyleSheet, SafeAreaView,
-  KeyboardAvoidingView, Platform, Alert,
+  View, Text, ScrollView, TouchableOpacity,
+  ActivityIndicator, RefreshControl, StyleSheet, SafeAreaView, Alert,
 } from "react-native";
 import { Accordion } from "../../components/Accordion";
 import { ProgressBar } from "../../components/ProgressBar";
 import { TransactionRow } from "../../components/TransactionRow";
+import { MilestoneRow } from "../../components/finance/MilestoneRow";
 import {
-  getFinanceSummary, getTransactions, logExpense, getSavingsGoals,
+  getFinanceSummary, getTransactions, getSavingsGoals,
   deleteTransaction, setBudgetWithType, deleteBudget, getBudgets, getAccounts,
   getLatestBalances, getMilestones, patchMilestoneActual,
   type CategoryBudget, type Budget, type Transaction, type SavingsGoal,
   type Account, type AccountBalance, type FinancialMilestone,
 } from "../../lib/api";
 import { useTheme } from "../../lib/theme";
-import { todayLocal } from "../../lib/dateUtils";
 import { fmt, fmtFull, accountTypeOrder, groupBalancesByType } from "../../lib/financeUtils";
-
-const EXPENSE_CATEGORIES = ["groceries", "dining", "fuel", "shopping", "misc", "home", "travel", "insurance", "gifts", "other"];
-
-// ── sub-components ────────────────────────────────────────────────────────────
-
-function MilestoneRow({ m, onConfirm }: { m: FinancialMilestone; onConfirm: (m: FinancialMilestone) => void }) {
-  const { colors } = useTheme();
-  const date = new Date(m.target_date + "T00:00:00");
-  const label = date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  const hasActual = m.actual_net_worth != null;
-  const ahead = hasActual && m.actual_net_worth! >= m.expected_net_worth;
-  const isPast = m.target_date <= todayLocal();
-  const dotColor = !isPast ? colors.textTertiary : ahead ? colors.accentGreen : colors.accentRed;
-
-  return (
-    <View style={ms.row}>
-      <View style={[ms.dot, { backgroundColor: dotColor }]} />
-      <View style={ms.labels}>
-        <Text style={[ms.date, { color: colors.text }]}>{label}</Text>
-        <Text style={[ms.expected, { color: colors.textSecondary }]}>
-          target {fmt(m.expected_net_worth)}
-        </Text>
-      </View>
-      <View style={ms.right}>
-        {hasActual ? (
-          <>
-            <Text style={[ms.actual, { color: ahead ? colors.accentGreen : colors.accentRed }]}>
-              {fmt(m.actual_net_worth!)}
-            </Text>
-            <Text style={[ms.delta, { color: ahead ? colors.accentGreen : colors.accentRed }]}>
-              {ahead ? "+" : ""}{fmt(m.actual_net_worth! - m.expected_net_worth)}
-            </Text>
-          </>
-        ) : isPast ? (
-          <TouchableOpacity
-            style={[ms.confirmBtn, { backgroundColor: colors.accent + "22", borderColor: colors.accent }]}
-            onPress={() => onConfirm(m)}
-          >
-            <Text style={[ms.confirmText, { color: colors.accent }]}>Confirm</Text>
-          </TouchableOpacity>
-        ) : (
-          <Text style={[ms.pending, { color: colors.textTertiary }]}>upcoming</Text>
-        )}
-      </View>
-    </View>
-  );
-}
-
-const ms = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", paddingVertical: 9, gap: 10 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  labels: { flex: 1 },
-  date: { fontSize: 14, fontWeight: "500" },
-  expected: { fontSize: 11, marginTop: 1 },
-  right: { alignItems: "flex-end" },
-  actual: { fontSize: 14, fontWeight: "600" },
-  delta: { fontSize: 11, marginTop: 1 },
-  pending: { fontSize: 12, color: "#999" },
-  confirmBtn: { borderRadius: 6, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4 },
-  confirmText: { fontSize: 12, fontWeight: "600" },
-});
 
 // ── main screen ───────────────────────────────────────────────────────────────
 
@@ -111,11 +50,8 @@ export default function FinanceScreen() {
   // SmartInputSheet state
   const [smartOpen, setSmartOpen] = useState(false);
 
-  // Log expense modal
-  const [sheetVisible, setSheetVisible] = useState(false);
-  const [expenseInput, setExpenseInput] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [logging, setLogging] = useState(false);
+  // Log expense sheet
+  const [logExpenseVisible, setLogExpenseVisible] = useState(false);
 
   // Budget edit sheet
   const [budgetSheetVisible, setBudgetSheetVisible] = useState(false);
@@ -205,23 +141,6 @@ export default function FinanceScreen() {
       defaultVal,
       "decimal-pad"
     );
-  };
-
-  const handleLogExpense = async () => {
-    if (!expenseInput.trim()) return;
-    setLogging(true);
-    try {
-      const tx = await logExpense(expenseInput.trim(), selectedCategory ?? undefined);
-      setTransactions((prev) => [tx, ...prev]);
-      setExpenseInput("");
-      setSelectedCategory(null);
-      setSheetVisible(false);
-      await loadData();
-    } catch (e: any) {
-      Alert.alert("Couldn't log expense", e?.message ?? "Please try again.");
-    } finally {
-      setLogging(false);
-    }
   };
 
   const handleDeleteTransaction = async (id: number) => {
@@ -697,45 +616,12 @@ export default function FinanceScreen() {
         )}
       </View>
 
-      {/* ── Log Expense Modal ──────────────────────────────────────────────── */}
-      <Modal visible={sheetVisible} transparent animationType="slide" onRequestClose={() => setSheetVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={s.overlay}>
-          <View style={[s.sheet, { backgroundColor: colors.card }]}>
-            <Text style={[s.sheetTitle, { color: colors.text }]}>Log an Expense</Text>
-            <Text style={[s.pickerLabel, { color: colors.textSecondary }]}>Category (optional)</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
-              <View style={s.pillRow}>
-                {EXPENSE_CATEGORIES.map((cat) => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[s.pill, { backgroundColor: selectedCategory === cat ? colors.accent : colors.cardElevated }]}
-                    onPress={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
-                  >
-                    <Text style={[s.pillText, { color: selectedCategory === cat ? "#fff" : colors.textSecondary }]}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-            <TextInput
-              style={[s.input, { backgroundColor: colors.inputBg, color: colors.text }]}
-              value={expenseInput}
-              onChangeText={setExpenseInput}
-              placeholder="e.g. $45 at Whole Foods"
-              placeholderTextColor={colors.textTertiary}
-              multiline autoFocus
-            />
-            <TouchableOpacity
-              style={[s.submitBtn, { backgroundColor: colors.accent }, logging && s.disabled]}
-              onPress={handleLogExpense} disabled={logging}
-            >
-              {logging ? <ActivityIndicator color="#fff" /> : <Text style={s.submitText}>Log Expense</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={s.cancelBtn} onPress={() => setSheetVisible(false)}>
-              <Text style={[s.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      {/* ── Log Expense Sheet ─────────────────────────────────────────────── */}
+      <LogExpenseSheet
+        visible={logExpenseVisible}
+        onClose={() => setLogExpenseVisible(false)}
+        onLogged={(tx) => { setTransactions((prev) => [tx, ...prev]); loadData(); }}
+      />
 
       {/* ── Budget Edit Sheet ──────────────────────────────────────────────── */}
       <BudgetEditSheet
