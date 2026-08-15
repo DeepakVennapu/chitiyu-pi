@@ -73,3 +73,22 @@ def test_task_instances_table_exists(conn):
         "SELECT name FROM sqlite_master WHERE type='table' AND name='task_instances'"
     ).fetchone()
     assert row is not None
+
+
+def test_weight_logs_table_exists(conn):
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(weight_logs)").fetchall()}
+    assert {"id", "user_id", "date", "recorded_at", "weight_kg", "bodyfat_pct", "muscle_kg", "bmi", "source"} <= cols
+
+
+def test_weight_logs_unique_user_date(conn):
+    conn.execute(
+        "INSERT INTO weight_logs(user_id, date, recorded_at, weight_kg, source) VALUES (?,?,?,?,?)",
+        (1, "2026-08-15", "2026-08-15 07:00:00", 84.6, "renpho")
+    )
+    conn.commit()
+    with pytest.raises(Exception):
+        conn.execute(
+            "INSERT INTO weight_logs(user_id, date, recorded_at, weight_kg, source) VALUES (?,?,?,?,?)",
+            (1, "2026-08-15", "2026-08-15 08:00:00", 84.7, "renpho")
+        )
+        conn.commit()

@@ -223,6 +223,7 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
             recurrence   TEXT NOT NULL DEFAULT 'none' CHECK(recurrence IN ('none','daily','weekly','monthly','yearly')),
             anchor_date  TEXT NOT NULL,
             advance_days INTEGER NOT NULL DEFAULT 1,
+            priority     INTEGER NOT NULL DEFAULT 0,
             created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime'))
         );
         CREATE TABLE IF NOT EXISTS task_instances (
@@ -237,6 +238,20 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_task_instances_user_due
             ON task_instances(user_id, due_date);
+        CREATE TABLE IF NOT EXISTS weight_logs (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     INTEGER NOT NULL DEFAULT 1,
+            date        TEXT NOT NULL,
+            recorded_at TEXT NOT NULL,
+            weight_kg   REAL NOT NULL,
+            bodyfat_pct REAL,
+            muscle_kg   REAL,
+            bmi         REAL,
+            source      TEXT NOT NULL DEFAULT 'renpho',
+            UNIQUE(user_id, date)
+        );
+        CREATE INDEX IF NOT EXISTS idx_weight_logs_user_date
+            ON weight_logs(user_id, date);
     """)
     try:
         conn.execute("""
@@ -248,3 +263,30 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
     except Exception:
         pass
     conn.commit()
+
+    # Migration: add priority column to task_templates if missing
+    existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(task_templates)").fetchall()}
+    if "priority" not in existing_cols:
+        conn.execute("ALTER TABLE task_templates ADD COLUMN priority INTEGER NOT NULL DEFAULT 0")
+        conn.commit()
+
+    # Migration: create weight_logs if missing (for existing DBs)
+    existing_tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    if "weight_logs" not in existing_tables:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS weight_logs (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     INTEGER NOT NULL DEFAULT 1,
+                date        TEXT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                weight_kg   REAL NOT NULL,
+                bodyfat_pct REAL,
+                muscle_kg   REAL,
+                bmi         REAL,
+                source      TEXT NOT NULL DEFAULT 'renpho',
+                UNIQUE(user_id, date)
+            );
+            CREATE INDEX IF NOT EXISTS idx_weight_logs_user_date
+                ON weight_logs(user_id, date);
+        """)
+        conn.commit()
