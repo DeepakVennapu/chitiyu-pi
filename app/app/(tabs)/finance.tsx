@@ -12,11 +12,12 @@ import { TransactionRow } from "../../components/TransactionRow";
 import { MilestoneRow } from "../../components/finance/MilestoneRow";
 import {
   getFinanceSummary, getTransactions, getSavingsGoals, createGoal,
-  deleteTransaction, setBudgetWithType, deleteBudget, getBudgets, getAccounts, createAccount,
+  deleteTransaction, getBudgets, getAccounts, createAccount,
   getLatestBalances, updateBalances, getMilestones, patchMilestoneActual,
-  type CategoryBudget, type Budget, type Transaction, type SavingsGoal,
+  type Budget, type Transaction, type SavingsGoal,
   type Account, type AccountBalance, type BalanceEntry, type FinancialMilestone,
 } from "../../lib/api";
+import { BudgetEditSheet } from "../../components/finance/BudgetEditSheet";
 import { useTheme } from "../../lib/theme";
 import { todayLocal } from "../../lib/dateUtils";
 import { fmt, fmtFull, accountTypeOrder, groupBalancesByType } from "../../lib/financeUtils";
@@ -51,16 +52,16 @@ export default function FinanceScreen() {
   // Log expense sheet
   const [logExpenseVisible, setLogExpenseVisible] = useState(false);
 
-  // Budget edit modal
-  const [budgetModalVisible, setBudgetModalVisible] = useState(false);
-  const [editingBudgetId, setEditingBudgetId] = useState<number | null>(null);
-  const [editingCategory, setEditingCategory] = useState<string | null>(null);
-  const [editingSpend, setEditingSpend] = useState<number | null>(null);
-  const [editingBudgetType, setEditingBudgetType] = useState<Budget["budget_type"]>("discretionary");
-  const [editingPeriod, setEditingPeriod] = useState<Budget["period"]>("monthly");
-  const [newCategoryInput, setNewCategoryInput] = useState("");
-  const [budgetInput, setBudgetInput] = useState("");
-  const [savingBudget, setSavingBudget] = useState(false);
+  // Budget edit sheet
+  const [budgetSheetVisible, setBudgetSheetVisible] = useState(false);
+  const [budgetEditConfig, setBudgetEditConfig] = useState<{
+    category: string | null;
+    budgetId: number | null;
+    spend: number | null;
+    budgetType: Budget["budget_type"];
+    period: Budget["period"];
+    amount: string;
+  }>({ category: null, budgetId: null, spend: null, budgetType: "discretionary", period: "monthly", amount: "" });
 
   // Balance update modal
   const [balanceModalVisible, setBalanceModalVisible] = useState(false);
@@ -130,22 +131,6 @@ export default function FinanceScreen() {
     setSummaryYear(y);
   };
 
-  const handleDeleteBudget = (id: number, category: string) => {
-    Alert.alert("Delete budget?", `Remove budget for "${category}"?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete", style: "destructive", onPress: async () => {
-          try {
-            await deleteBudget(id);
-            await loadData();
-          } catch (e: any) {
-            Alert.alert("Couldn't delete budget", e?.message ?? "Please try again.");
-          }
-        },
-      },
-    ]);
-  };
-
   const handleConfirmMilestone = (m: FinancialMilestone) => {
     const defaultVal = m.current_balance != null ? String(Math.round(m.current_balance)) : "";
     Alert.prompt(
@@ -184,31 +169,15 @@ export default function FinanceScreen() {
     const budgetRow = budgetList.find(
       (b) => b.category.toLowerCase() === category.toLowerCase()
     );
-    setBudgetInput(catData?.budget != null ? String(catData.budget) : "");
-    setEditingSpend(catData?.spent ?? null);
-    setEditingBudgetType(catData?.budget_type ?? "discretionary");
-    setEditingPeriod(catData?.period ?? "monthly");
-    setEditingCategory(category || null);
-    setEditingBudgetId(budgetRow?.id ?? null);
-    setNewCategoryInput("");
-    setBudgetModalVisible(true);
-  };
-
-  const handleSaveBudget = async () => {
-    const targetCategory = editingCategory || newCategoryInput.trim();
-    if (!targetCategory) { Alert.alert("Missing category", "Enter a category name."); return; }
-    const amount = parseFloat(budgetInput);
-    if (isNaN(amount) || amount <= 0) { Alert.alert("Invalid amount", "Enter a positive number."); return; }
-    setSavingBudget(true);
-    try {
-      await setBudgetWithType(targetCategory, amount, editingBudgetType, editingPeriod);
-      await loadData();
-      setBudgetModalVisible(false);
-    } catch (e: any) {
-      Alert.alert("Couldn't save budget", e?.message ?? "Please try again.");
-    } finally {
-      setSavingBudget(false);
-    }
+    setBudgetEditConfig({
+      category: category || null,
+      budgetId: budgetRow?.id ?? null,
+      spend: catData?.spent ?? null,
+      budgetType: catData?.budget_type ?? "discretionary",
+      period: catData?.period ?? "monthly",
+      amount: catData?.budget != null ? String(catData.budget) : "",
+    });
+    setBudgetSheetVisible(true);
   };
 
   const openBalanceModal = () => {
@@ -727,101 +696,19 @@ export default function FinanceScreen() {
         )}
       </View>
 
-      {/* ── Budget Edit Modal ──────────────────────────────────────────────── */}
-      <Modal visible={budgetModalVisible} transparent animationType="slide" onRequestClose={() => setBudgetModalVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={s.overlay}>
-          <View style={[s.sheet, { backgroundColor: colors.card }]}>
-            <Text style={[s.sheetTitle, { color: colors.text }]}>
-              {editingCategory ? `Budget — ${editingCategory}` : "Add Budget"}
-            </Text>
-            {!editingCategory && (
-              <>
-                <Text style={[s.pickerLabel, { color: colors.textSecondary }]}>Category</Text>
-                <TextInput
-                  style={[s.input, { backgroundColor: colors.inputBg, color: colors.text, minHeight: 0, marginBottom: 12 }]}
-                  value={newCategoryInput}
-                  onChangeText={setNewCategoryInput}
-                  placeholder="e.g. dining"
-                  placeholderTextColor={colors.textTertiary}
-                  autoFocus
-                />
-              </>
-            )}
-            {editingCategory && editingSpend != null && editingSpend > 0 && (
-              <Text style={[s.pickerLabel, { color: colors.textSecondary, marginBottom: 12, textTransform: "none", letterSpacing: 0 }]}>
-                Spent this month: {fmt(editingSpend)}
-              </Text>
-            )}
-            <Text style={[s.pickerLabel, { color: colors.textSecondary }]}>Type</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-              <View style={s.pillRow}>
-                {(["discretionary", "fixed", "recurring", "envelope"] as Budget["budget_type"][]).map((t) => (
-                  <TouchableOpacity
-                    key={t}
-                    style={[s.pill, { backgroundColor: editingBudgetType === t ? colors.accent : colors.cardElevated }]}
-                    onPress={() => {
-                      setEditingBudgetType(t);
-                      setEditingPeriod(t === "envelope" ? "biannual" : "monthly");
-                    }}
-                  >
-                    <Text style={[s.pillText, { color: editingBudgetType === t ? "#fff" : colors.textSecondary }]}>{t}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-            {editingBudgetType === "envelope" && (
-              <>
-                <Text style={[s.pickerLabel, { color: colors.textSecondary }]}>Period</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                  <View style={s.pillRow}>
-                    {(["monthly", "biannual", "annual"] as Budget["period"][]).map((p) => (
-                      <TouchableOpacity
-                        key={p}
-                        style={[s.pill, { backgroundColor: editingPeriod === p ? colors.accent : colors.cardElevated }]}
-                        onPress={() => setEditingPeriod(p)}
-                      >
-                        <Text style={[s.pillText, { color: editingPeriod === p ? "#fff" : colors.textSecondary }]}>{p}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </ScrollView>
-              </>
-            )}
-            <Text style={[s.pickerLabel, { color: colors.textSecondary }]}>
-              {editingBudgetType === "envelope" ? "Pool amount ($)" : "Monthly limit ($)"}
-            </Text>
-            <TextInput
-              style={[s.input, { backgroundColor: colors.inputBg, color: colors.text, minHeight: 0 }]}
-              value={budgetInput}
-              onChangeText={setBudgetInput}
-              placeholder="e.g. 500"
-              placeholderTextColor={colors.textTertiary}
-              keyboardType="decimal-pad"
-              autoFocus={!!editingCategory}
-            />
-            <TouchableOpacity
-              style={[s.submitBtn, { backgroundColor: colors.accent }, savingBudget && s.disabled]}
-              onPress={handleSaveBudget} disabled={savingBudget}
-            >
-              {savingBudget ? <ActivityIndicator color="#fff" /> : <Text style={s.submitText}>Save Limit</Text>}
-            </TouchableOpacity>
-            {editingBudgetId != null && (
-              <TouchableOpacity
-                style={s.cancelBtn}
-                onPress={() => {
-                  setBudgetModalVisible(false);
-                  handleDeleteBudget(editingBudgetId!, editingCategory!);
-                }}
-              >
-                <Text style={[s.cancelText, { color: colors.accentRed }]}>Delete Budget</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={s.cancelBtn} onPress={() => setBudgetModalVisible(false)}>
-              <Text style={[s.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      {/* ── Budget Edit Sheet ──────────────────────────────────────────────── */}
+      <BudgetEditSheet
+        visible={budgetSheetVisible}
+        editingCategory={budgetEditConfig.category}
+        editingBudgetId={budgetEditConfig.budgetId}
+        editingSpend={budgetEditConfig.spend}
+        initialBudgetType={budgetEditConfig.budgetType}
+        initialPeriod={budgetEditConfig.period}
+        initialAmount={budgetEditConfig.amount}
+        onClose={() => setBudgetSheetVisible(false)}
+        onSaved={() => { setBudgetSheetVisible(false); loadData(); }}
+        onDeleted={() => { setBudgetSheetVisible(false); loadData(); }}
+      />
 
       {/* ── Update Balances Modal ─────────────────────────────────────────── */}
       <Modal visible={balanceModalVisible} transparent animationType="slide" onRequestClose={() => setBalanceModalVisible(false)}>

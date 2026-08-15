@@ -123,12 +123,34 @@ def _evening_followup() -> None:
         logger.exception("evening followup failed")
 
 
+def _renpho_sync() -> None:
+    """7am: sync latest weight measurement from Renpho scale."""
+    from db.connection import get_connection
+    from db.schema import initialize_schema
+    from domains.health.renpho import sync_renpho_weight
+
+    conn = get_connection(DB_PATH)
+    initialize_schema(conn)
+    try:
+        result = sync_renpho_weight(conn, user_id=1)
+        if result:
+            logger.info("Renpho sync complete: %.1f kg", result["weight_kg"])
+    except Exception:
+        logger.exception("Renpho sync job failed")
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 def build_scheduler() -> BackgroundScheduler:
     import datetime as _dt
     _local_tz = _dt.datetime.now().astimezone().tzinfo
     sched = BackgroundScheduler(timezone=_local_tz)
+    sched.add_job(_renpho_sync,      CronTrigger(hour=7,        minute=0),  id="renpho_sync")
     sched.add_job(_morning_digest,   CronTrigger(hour=8,        minute=0),  id="morning_digest")
-    sched.add_job(_meal_nudge,       CronTrigger(hour="9-22",   minute=0),  id="meal_nudge")
+    # sched.add_job(_meal_nudge,       CronTrigger(hour="9-22",   minute=0),  id="meal_nudge")  # disabled
     sched.add_job(_midday_nudge,     CronTrigger(hour=16,       minute=0),  id="midday_nudge")
     sched.add_job(_evening_prompt,   CronTrigger(hour=22,       minute=0),  id="evening_prompt")
     sched.add_job(_evening_followup, CronTrigger(hour=22,       minute=30), id="evening_followup")
