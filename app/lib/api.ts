@@ -251,6 +251,9 @@ export const setBudgetWithType = (
 ) =>
   request<Budget>("POST", "/finance/budgets", { category, amount, budget_type, period });
 
+export const deleteBudget = (id: number) =>
+  request<{ ok: boolean }>("DELETE", `/finance/budgets/${id}`);
+
 // ─── Accounts ─────────────────────────────────────────────────────────────────
 
 export interface Account {
@@ -304,6 +307,7 @@ export interface FinancialMilestone {
   expected_net_worth: number;
   actual_net_worth: number | null;
   note: string | null;
+  current_balance?: number | null;
 }
 
 export const getMilestones = (period_label?: string) =>
@@ -313,6 +317,9 @@ export const getMilestones = (period_label?: string) =>
 
 export const createMilestone = (m: Omit<FinancialMilestone, "id">) =>
   request<{ id: number }>("POST", "/finance/milestones", m);
+
+export const patchMilestoneActual = (target_date: string, amount: number) =>
+  request<{ ok: boolean }>("PATCH", `/finance/milestones/${target_date}`, { actual_net_worth: amount });
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
 
