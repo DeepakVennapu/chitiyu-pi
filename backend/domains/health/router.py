@@ -317,3 +317,17 @@ def weight_trend(user_id: int = 1, days: int = 7):
     avg = round(sum(weights) / len(weights), 1) if weights else None
     delta = round(weights[-1] - weights[0], 1) if len(weights) >= 2 else None
     return {"logs": logs, "avg_weight_kg": avg, "delta_kg": delta}
+
+
+@router.post("/weight/sync")
+def trigger_weight_sync(user_id: int = 1):
+    from domains.health.renpho import sync_renpho_weight
+    conn = _conn()
+    try:
+        result = sync_renpho_weight(conn, user_id)
+    finally:
+        conn.close()
+    if result is None:
+        raise HTTPException(503, "Renpho sync failed or no data available")
+    result["weight_lbs"] = round(result["weight_kg"] * 2.20462, 1)
+    return result
