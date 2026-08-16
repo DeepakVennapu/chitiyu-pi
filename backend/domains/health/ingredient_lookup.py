@@ -83,8 +83,6 @@ def lookup_meal_macros(conn: sqlite3.Connection, text: str) -> dict | None:
         names.append(ing["name"])
         matched.append(item)
 
-    if not items:
-        return None
     coverage = len(matched) / len(items) * 100
     if coverage < 50:
         return None

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from auth import verify_api_key
 from db.connection import get_connection
 from db.schema import initialize_schema
@@ -58,7 +58,7 @@ class MealFromRecipe(BaseModel):
     user_id: int = 1
     recipe_id: int
     logged_at: str | None = None
-    multiplier: float = 1.0
+    multiplier: float = Field(default=1.0, gt=0, le=10)
 
 
 class MealLogParsed(BaseModel):
