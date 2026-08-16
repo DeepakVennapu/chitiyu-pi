@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from auth import verify_api_key
 from db.connection import get_connection
 from db.schema import initialize_schema
@@ -35,6 +35,8 @@ class RecipeCreate(BaseModel):
     fat: float | None = None
     carbs: float | None = None
     serving_unit: str | None = None
+    serving_grams: int | None = None
+    serving_label: str | None = None
 
 
 class HealthSync(BaseModel):
@@ -55,7 +57,8 @@ class MealPreview(BaseModel):
 class MealFromRecipe(BaseModel):
     user_id: int = 1
     recipe_id: int
-    logged_at: str | None = None  # ISO 8601 — if omitted, defaults to now
+    logged_at: str | None = None
+    multiplier: float = Field(default=1.0, gt=0, le=10)
 
 
 class MealLogParsed(BaseModel):
@@ -91,7 +94,11 @@ def meals_today(user_id: int = 1):
 @router.post("/meals/preview")
 def preview_meal(body: MealPreview):
     from domains.health.tools import parse_meal_macros
-    data = parse_meal_macros(body.text, body.context)
+    conn = _conn()
+    try:
+        data = parse_meal_macros(body.text, body.context, conn=conn)
+    finally:
+        conn.close()
     if data is None:
         raise HTTPException(422, "Couldn't parse that meal. Try: '2 eggs, toast, coffee'.")
     return data
@@ -101,7 +108,8 @@ def preview_meal(body: MealPreview):
 def log_from_recipe(body: MealFromRecipe):
     conn = _conn()
     try:
-        recipe = log_meal_from_recipe(conn, body.user_id, body.recipe_id, body.logged_at)
+        recipe = log_meal_from_recipe(conn, body.user_id, body.recipe_id,
+                                      body.logged_at, body.multiplier)
     finally:
         conn.close()
     if recipe is None:
@@ -186,7 +194,8 @@ def delete_recipe_endpoint(recipe_id: int, user_id: int = 1):
 def create_recipe(body: RecipeCreate):
     conn = _conn()
     recipe_id = insert_recipe(conn, body.user_id, body.name, body.calories,
-                              body.protein, body.fat, body.carbs, body.serving_unit)
+                              body.protein, body.fat, body.carbs, body.serving_unit,
+                              body.serving_grams, body.serving_label)
     conn.close()
     return {"id": recipe_id, "name": body.name}
 

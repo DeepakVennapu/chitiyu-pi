@@ -252,6 +252,18 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
         );
         CREATE INDEX IF NOT EXISTS idx_weight_logs_user_date
             ON weight_logs(user_id, date);
+        CREATE TABLE IF NOT EXISTS ingredients (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            name              TEXT NOT NULL,
+            name_lower        TEXT NOT NULL,
+            calories_per_100g REAL NOT NULL,
+            protein_per_100g  REAL NOT NULL,
+            fat_per_100g      REAL NOT NULL,
+            carbs_per_100g    REAL NOT NULL,
+            category          TEXT NOT NULL DEFAULT 'other'
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_ingredients_name_lower
+            ON ingredients(name_lower);
     """)
     try:
         conn.execute("""
@@ -290,3 +302,14 @@ def initialize_schema(conn: sqlite3.Connection) -> None:
                 ON weight_logs(user_id, date);
         """)
         conn.commit()
+
+    # Migrate recipes: add serving columns if missing
+    for col, typedef in [
+        ("serving_grams", "INTEGER"),
+        ("serving_label", "TEXT"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE recipes ADD COLUMN {col} {typedef}")
+            conn.commit()
+        except Exception:
+            pass  # column already exists

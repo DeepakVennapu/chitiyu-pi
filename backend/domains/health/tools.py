@@ -11,8 +11,15 @@ Context (if any): {context}
 Meal: {text}"""
 
 
-def parse_meal_macros(text: str, context: str = "") -> dict | None:
-    """Call Claude to parse meal text into macros. Returns dict or None on failure."""
+def parse_meal_macros(text: str, context: str = "",
+                      conn: sqlite3.Connection | None = None) -> dict | None:
+    """Try local ingredient lookup first; fall back to Claude on miss."""
+    if conn is not None:
+        from domains.health.ingredient_lookup import lookup_meal_macros
+        local = lookup_meal_macros(conn, text)
+        if local is not None:
+            return local
+
     raw = call_claude(_PARSE_PROMPT.format(text=text, context=context),
                       model=DISPATCH_MODEL, timeout=20)
     m = re.search(r'\{.*\}', raw, re.DOTALL)
