@@ -1,26 +1,27 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { SmartInputSheet } from "../../components/SmartInputSheet";
 import { LogExpenseSheet } from "../../components/finance/LogExpenseSheet";
+import { BudgetEditSheet } from "../../components/finance/BudgetEditSheet";
+import { UpdateBalancesSheet } from "../../components/finance/UpdateBalancesSheet";
+import { AddGoalSheet } from "../../components/finance/AddGoalSheet";
+import { AddAccountSheet } from "../../components/finance/AddAccountSheet";
 import {
-  View, Text, ScrollView, TouchableOpacity, Modal, TextInput,
-  ActivityIndicator, RefreshControl, StyleSheet, SafeAreaView,
-  KeyboardAvoidingView, Platform, Alert,
+  View, Text, ScrollView, TouchableOpacity,
+  ActivityIndicator, RefreshControl, StyleSheet, SafeAreaView, Alert,
 } from "react-native";
 import { Accordion } from "../../components/Accordion";
 import { ProgressBar } from "../../components/ProgressBar";
 import { TransactionRow } from "../../components/TransactionRow";
 import { MilestoneRow } from "../../components/finance/MilestoneRow";
 import {
-  getFinanceSummary, getTransactions, getSavingsGoals, createGoal,
-  deleteTransaction, getBudgets, getAccounts, createAccount,
-  getLatestBalances, updateBalances, getMilestones, patchMilestoneActual,
-  type Budget, type Transaction, type SavingsGoal,
-  type Account, type AccountBalance, type BalanceEntry, type FinancialMilestone,
+  getFinanceSummary, getTransactions, getSavingsGoals,
+  deleteTransaction, setBudgetWithType, deleteBudget, getBudgets, getAccounts,
+  getLatestBalances, getMilestones, patchMilestoneActual,
+  type CategoryBudget, type Budget, type Transaction, type SavingsGoal,
+  type Account, type AccountBalance, type FinancialMilestone,
 } from "../../lib/api";
-import { BudgetEditSheet } from "../../components/finance/BudgetEditSheet";
 import { useTheme } from "../../lib/theme";
-import { todayLocal } from "../../lib/dateUtils";
-import { fmt, fmtFull, accountTypeOrder, groupBalancesByType } from "../../lib/financeUtils";
+import { fmt, fmtFull, accountTypeOrder } from "../../lib/financeUtils";
 
 // ── main screen ───────────────────────────────────────────────────────────────
 
@@ -63,24 +64,14 @@ export default function FinanceScreen() {
     amount: string;
   }>({ category: null, budgetId: null, spend: null, budgetType: "discretionary", period: "monthly", amount: "" });
 
-  // Balance update modal
-  const [balanceModalVisible, setBalanceModalVisible] = useState(false);
-  const [balanceInputs, setBalanceInputs] = useState<Record<number, string>>({});
-  const [lastUpdated, setLastUpdated] = useState<Record<number, string>>({});
-  const [savingBalances, setSavingBalances] = useState(false);
+  // Balance update sheet
+  const [balanceSheetVisible, setBalanceSheetVisible] = useState(false);
 
-  // Add Goal modal
-  const [goalModalVisible, setGoalModalVisible] = useState(false);
-  const [goalNameInput, setGoalNameInput] = useState("");
-  const [goalAmountInput, setGoalAmountInput] = useState("");
-  const [goalDateInput, setGoalDateInput] = useState("");
-  const [savingGoal, setSavingGoal] = useState(false);
+  // Add Goal sheet
+  const [goalSheetVisible, setGoalSheetVisible] = useState(false);
 
-  // Add Account modal
-  const [accountModalVisible, setAccountModalVisible] = useState(false);
-  const [accountNameInput, setAccountNameInput] = useState("");
-  const [accountTypeInput, setAccountTypeInput] = useState<Account["type"]>("checking");
-  const [savingAccount, setSavingAccount] = useState(false);
+  // Add Account sheet
+  const [accountSheetVisible, setAccountSheetVisible] = useState(false);
 
   const loadData = useCallback(async () => {
     setError(null);
@@ -180,83 +171,11 @@ export default function FinanceScreen() {
     setBudgetSheetVisible(true);
   };
 
-  const openBalanceModal = () => {
-    const initial: Record<number, string> = {};
-    const lastUpd: Record<number, string> = {};
-    for (const b of balances) {
-      initial[b.account_id] = String(Math.abs(b.balance));
-      lastUpd[b.account_id] = b.date;
-    }
-    setBalanceInputs(initial);
-    setLastUpdated(lastUpd);
-    setBalanceModalVisible(true);
-  };
 
-  const handleSaveBalances = async () => {
-    const entries: BalanceEntry[] = [];
-    for (const acct of accounts) {
-      const raw = balanceInputs[acct.id];
-      const hasExisting = balances.some(b => b.account_id === acct.id);
-      // Skip only if field is blank AND no prior balance exists
-      if ((raw == null || raw.trim() === "") && !hasExisting) continue;
-      const val = parseFloat(raw ?? "0") || 0;
-      // Credit balances stored as negative internally
-      entries.push({ account_id: acct.id, balance: acct.type === "credit" ? -Math.abs(val) : val });
-    }
-    if (entries.length === 0) { setBalanceModalVisible(false); return; }
-    setSavingBalances(true);
-    try {
-      const res = await updateBalances(entries);
-      setComputedNetWorth(res.computed_net_worth);
-      await loadData();
-      setBalanceModalVisible(false);
-    } catch (e: any) {
-      Alert.alert("Couldn't save balances", e?.message ?? "Please try again.");
-    } finally {
-      setSavingBalances(false);
-    }
-  };
 
-  const handleSaveGoal = async () => {
-    const name = goalNameInput.trim();
-    const amount = parseFloat(goalAmountInput);
-    if (!name) { Alert.alert("Missing name", "Enter a goal name."); return; }
-    if (isNaN(amount) || amount <= 0) { Alert.alert("Invalid amount", "Enter a positive amount."); return; }
-    setSavingGoal(true);
-    try {
-      await createGoal({ name, target_amount: amount, target_date: goalDateInput.trim() || null });
-      setGoalNameInput("");
-      setGoalAmountInput("");
-      setGoalDateInput("");
-      setGoalModalVisible(false);
-      await loadData();
-    } catch (e: any) {
-      Alert.alert("Couldn't save goal", e?.message ?? "Please try again.");
-    } finally {
-      setSavingGoal(false);
-    }
-  };
-
-  const handleSaveAccount = async () => {
-    const name = accountNameInput.trim();
-    if (!name) { Alert.alert("Missing name", "Enter an account name."); return; }
-    setSavingAccount(true);
-    try {
-      await createAccount(name, accountTypeInput);
-      setAccountNameInput("");
-      setAccountTypeInput("checking");
-      setAccountModalVisible(false);
-      await loadData();
-    } catch (e: any) {
-      Alert.alert("Couldn't add account", e?.message ?? "Please try again.");
-    } finally {
-      setSavingAccount(false);
-    }
-  };
 
   // ── derived ──────────────────────────────────────────────────────────────────
 
-  const balanceGroups = groupBalancesByType(balances, accounts);
   const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a]));
 
   const filteredMilestones = selectedPeriod
@@ -478,7 +397,7 @@ export default function FinanceScreen() {
           )}
           <TouchableOpacity
             style={[s.updateBtn, { borderColor: colors.textTertiary, marginTop: 8 }]}
-            onPress={() => setAccountModalVisible(true)}
+            onPress={() => setAccountSheetVisible(true)}
           >
             <Text style={[s.updateBtnText, { color: colors.textTertiary }]}>+ Add Account</Text>
           </TouchableOpacity>
@@ -659,7 +578,7 @@ export default function FinanceScreen() {
           ))}
           <TouchableOpacity
             style={[s.updateBtn, { borderColor: colors.accent, marginTop: 8 }]}
-            onPress={() => setGoalModalVisible(true)}
+            onPress={() => setGoalSheetVisible(true)}
           >
             <Text style={[s.updateBtnText, { color: colors.accent }]}>+ Add Goal</Text>
           </TouchableOpacity>
@@ -689,12 +608,20 @@ export default function FinanceScreen() {
         {accounts.length > 0 && (
           <TouchableOpacity
             style={[s.fab, { backgroundColor: colors.accent }]}
-            onPress={openBalanceModal}
+            onPress={() => setBalanceSheetVisible(true)}
           >
             <Text style={[s.fabText, { color: "#fff" }]}>Update Balances</Text>
           </TouchableOpacity>
         )}
       </View>
+
+      {/* ── Log Expense Sheet ─────────────────────────────────────────────── */}
+      <LogExpenseSheet
+        visible={logExpenseVisible}
+        onClose={() => setLogExpenseVisible(false)}
+        onLogged={(tx) => { setTransactions((prev) => [tx, ...prev]); loadData(); }}
+      />
+
 
       {/* ── Budget Edit Sheet ──────────────────────────────────────────────── */}
       <BudgetEditSheet
@@ -710,143 +637,27 @@ export default function FinanceScreen() {
         onDeleted={() => { setBudgetSheetVisible(false); loadData(); }}
       />
 
-      {/* ── Update Balances Modal ─────────────────────────────────────────── */}
-      <Modal visible={balanceModalVisible} transparent animationType="slide" onRequestClose={() => setBalanceModalVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={s.overlay}>
-          <ScrollView style={[s.sheet, s.sheetScroll, { backgroundColor: colors.card }]}
-            keyboardShouldPersistTaps="handled">
-            <Text style={[s.sheetTitle, { color: colors.text }]}>Update Balances</Text>
-            <Text style={[s.pickerLabel, { color: colors.textSecondary, marginBottom: 16 }]}>
-              Enter today's balances. Credit cards: enter the amount owed (we'll make it negative).
-            </Text>
-            {[...new Set(accounts.map((a) => a.type))]
-              .sort((a, b) => accountTypeOrder(a) - accountTypeOrder(b))
-              .map((type) => (
-                <View key={type}>
-                  <Text style={[s.typeHeader, { color: colors.textTertiary }]}>{type.toUpperCase()}</Text>
-                  {accounts
-                    .filter((a) => a.type === type)
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((acct) => (
-                      <View key={acct.id} style={[s.balRow, { borderBottomColor: colors.border }]}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[s.balLabel, { color: colors.text }]}>{acct.name}</Text>
-                          {lastUpdated[acct.id] && (
-                            <Text style={[s.balDate, { color: colors.textTertiary }]}>
-                              Updated {new Date(lastUpdated[acct.id] + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                            </Text>
-                          )}
-                        </View>
-                        <TextInput
-                          style={[s.balInput, { backgroundColor: colors.inputBg, color: colors.text }]}
-                          value={balanceInputs[acct.id] ?? ""}
-                          onChangeText={(v) => setBalanceInputs((prev) => ({ ...prev, [acct.id]: v }))}
-                          placeholder="0"
-                          placeholderTextColor={colors.textTertiary}
-                          keyboardType="decimal-pad"
-                        />
-                      </View>
-                    ))}
-                </View>
-              ))}
-            <TouchableOpacity
-              style={[s.submitBtn, { backgroundColor: colors.accent, marginTop: 16 }, savingBalances && s.disabled]}
-              onPress={handleSaveBalances} disabled={savingBalances}
-            >
-              {savingBalances ? <ActivityIndicator color="#fff" /> : <Text style={s.submitText}>Save Balances</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={s.cancelBtn} onPress={() => setBalanceModalVisible(false)}>
-              <Text style={[s.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </Modal>
-      {/* ── Add Goal Modal ────────────────────────────────────────────────── */}
-      <Modal visible={goalModalVisible} transparent animationType="slide" onRequestClose={() => setGoalModalVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={s.overlay}>
-          <View style={[s.sheet, { backgroundColor: colors.card }]}>
-            <Text style={[s.sheetTitle, { color: colors.text }]}>New Savings Goal</Text>
-            <Text style={[s.pickerLabel, { color: colors.textSecondary }]}>Goal name</Text>
-            <TextInput
-              style={[s.input, { backgroundColor: colors.inputBg, color: colors.text, minHeight: 0, marginBottom: 12 }]}
-              value={goalNameInput}
-              onChangeText={setGoalNameInput}
-              placeholder="e.g. Emergency Fund"
-              placeholderTextColor={colors.textTertiary}
-              autoFocus
-            />
-            <Text style={[s.pickerLabel, { color: colors.textSecondary }]}>Target amount ($)</Text>
-            <TextInput
-              style={[s.input, { backgroundColor: colors.inputBg, color: colors.text, minHeight: 0, marginBottom: 12 }]}
-              value={goalAmountInput}
-              onChangeText={setGoalAmountInput}
-              placeholder="e.g. 10000"
-              placeholderTextColor={colors.textTertiary}
-              keyboardType="decimal-pad"
-            />
-            <Text style={[s.pickerLabel, { color: colors.textSecondary }]}>Target date (optional)</Text>
-            <TextInput
-              style={[s.input, { backgroundColor: colors.inputBg, color: colors.text, minHeight: 0, marginBottom: 16 }]}
-              value={goalDateInput}
-              onChangeText={setGoalDateInput}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.textTertiary}
-            />
-            <TouchableOpacity
-              style={[s.submitBtn, { backgroundColor: colors.accent }, savingGoal && s.disabled]}
-              onPress={handleSaveGoal}
-              disabled={savingGoal}
-            >
-              {savingGoal ? <ActivityIndicator color="#fff" /> : <Text style={s.submitText}>Save Goal</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={s.cancelBtn} onPress={() => setGoalModalVisible(false)}>
-              <Text style={[s.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      {/* ── Update Balances Sheet ──────────────────────────────────────────── */}
+      <UpdateBalancesSheet
+        visible={balanceSheetVisible}
+        accounts={accounts}
+        balances={balances}
+        onClose={() => setBalanceSheetVisible(false)}
+        onSaved={(nw) => { setComputedNetWorth(nw); setBalanceSheetVisible(false); loadData(); }}
+      />
+      {/* ── Add Goal Sheet ────────────────────────────────────────────────── */}
+      <AddGoalSheet
+        visible={goalSheetVisible}
+        onClose={() => setGoalSheetVisible(false)}
+        onSaved={() => { setGoalSheetVisible(false); loadData(); }}
+      />
 
-      {/* ── Add Account Modal ─────────────────────────────────────────────── */}
-      <Modal visible={accountModalVisible} transparent animationType="slide" onRequestClose={() => setAccountModalVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={s.overlay}>
-          <View style={[s.sheet, { backgroundColor: colors.card }]}>
-            <Text style={[s.sheetTitle, { color: colors.text }]}>Add Account</Text>
-            <Text style={[s.pickerLabel, { color: colors.textSecondary }]}>Account name</Text>
-            <TextInput
-              style={[s.input, { backgroundColor: colors.inputBg, color: colors.text, minHeight: 0, marginBottom: 12 }]}
-              value={accountNameInput}
-              onChangeText={setAccountNameInput}
-              placeholder="e.g. Fidelity Brokerage"
-              placeholderTextColor={colors.textTertiary}
-              autoFocus
-            />
-            <Text style={[s.pickerLabel, { color: colors.textSecondary }]}>Account type</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
-              <View style={s.pillRow}>
-                {(["checking", "savings", "credit", "brokerage", "investment", "crypto"] as Account["type"][]).map((t) => (
-                  <TouchableOpacity
-                    key={t}
-                    style={[s.pill, { backgroundColor: accountTypeInput === t ? colors.accent : colors.cardElevated }]}
-                    onPress={() => setAccountTypeInput(t)}
-                  >
-                    <Text style={[s.pillText, { color: accountTypeInput === t ? "#fff" : colors.textSecondary }]}>{t}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-            <TouchableOpacity
-              style={[s.submitBtn, { backgroundColor: colors.accent }, savingAccount && s.disabled]}
-              onPress={handleSaveAccount}
-              disabled={savingAccount}
-            >
-              {savingAccount ? <ActivityIndicator color="#fff" /> : <Text style={s.submitText}>Add Account</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={s.cancelBtn} onPress={() => setAccountModalVisible(false)}>
-              <Text style={[s.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      {/* ── Add Account Sheet ─────────────────────────────────────────────── */}
+      <AddAccountSheet
+        visible={accountSheetVisible}
+        onClose={() => setAccountSheetVisible(false)}
+        onSaved={() => { setAccountSheetVisible(false); loadData(); }}
+      />
 
       <LogExpenseSheet
         visible={logExpenseVisible}
@@ -918,22 +729,5 @@ const s = StyleSheet.create({
   // Primary button (inside lists)
   primaryButton: { borderRadius: 12, paddingVertical: 13, alignItems: "center" },
   primaryButtonText: { color: "#fff", fontSize: 15, fontWeight: "600" },
-  // Modals
-  overlay: { flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" },
-  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
-  sheetScroll: { maxHeight: "85%", paddingBottom: 0 },
-  sheetTitle: { fontSize: 17, fontWeight: "600", marginBottom: 16 },
-  pickerLabel: { fontSize: 12, fontWeight: "500", textTransform: "uppercase", letterSpacing: 0.5 },
-  input: { borderRadius: 10, padding: 14, fontSize: 15, minHeight: 80, textAlignVertical: "top", marginBottom: 16 },
-  submitBtn: { borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 10 },
-  disabled: { opacity: 0.6 },
-  submitText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  cancelBtn: { alignItems: "center", paddingVertical: 10 },
-  cancelText: { fontSize: 15 },
   emptyHint: { fontSize: 13, paddingVertical: 8 },
-  // Balance modal rows
-  balRow: { flexDirection: "row", alignItems: "center", paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, gap: 12 },
-  balLabel: { fontSize: 14 },
-  balDate: { fontSize: 11, marginTop: 2 },
-  balInput: { width: 120, borderRadius: 8, padding: 10, fontSize: 14, textAlign: "right" },
 });
