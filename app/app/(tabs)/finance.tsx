@@ -21,7 +21,7 @@ import {
   type Account, type AccountBalance, type FinancialMilestone,
 } from "../../lib/api";
 import { useTheme } from "../../lib/theme";
-import { fmt, fmtFull, accountTypeOrder, groupBalancesByType } from "../../lib/financeUtils";
+import { fmt, fmtFull, accountTypeOrder } from "../../lib/financeUtils";
 
 // ── main screen ───────────────────────────────────────────────────────────────
 
@@ -176,7 +176,6 @@ export default function FinanceScreen() {
 
   // ── derived ──────────────────────────────────────────────────────────────────
 
-  const balanceGroups = groupBalancesByType(balances, accounts);
   const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a]));
 
   const filteredMilestones = selectedPeriod
@@ -723,22 +722,5 @@ const s = StyleSheet.create({
   // Primary button (inside lists)
   primaryButton: { borderRadius: 12, paddingVertical: 13, alignItems: "center" },
   primaryButtonText: { color: "#fff", fontSize: 15, fontWeight: "600" },
-  // Modals
-  overlay: { flex: 1, backgroundColor: "#00000088", justifyContent: "flex-end" },
-  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
-  sheetScroll: { maxHeight: "85%", paddingBottom: 0 },
-  sheetTitle: { fontSize: 17, fontWeight: "600", marginBottom: 16 },
-  pickerLabel: { fontSize: 12, fontWeight: "500", textTransform: "uppercase", letterSpacing: 0.5 },
-  input: { borderRadius: 10, padding: 14, fontSize: 15, minHeight: 80, textAlignVertical: "top", marginBottom: 16 },
-  submitBtn: { borderRadius: 12, paddingVertical: 14, alignItems: "center", marginBottom: 10 },
-  disabled: { opacity: 0.6 },
-  submitText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  cancelBtn: { alignItems: "center", paddingVertical: 10 },
-  cancelText: { fontSize: 15 },
   emptyHint: { fontSize: 13, paddingVertical: 8 },
-  // Balance modal rows
-  balRow: { flexDirection: "row", alignItems: "center", paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, gap: 12 },
-  balLabel: { fontSize: 14 },
-  balDate: { fontSize: 11, marginTop: 2 },
-  balInput: { width: 120, borderRadius: 8, padding: 10, fontSize: 14, textAlign: "right" },
 });
