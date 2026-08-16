@@ -49,3 +49,20 @@ export function dateToLocal(d: Date): string {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
+
+/**
+ * Build a local ISO datetime string for a given date and meal-time slot.
+ * e.g. slotISO(new Date(), "breakfast") → "2026-08-15T08:00:00"
+ */
+export function slotISO(date: Date | string, slot: string): string {
+  const slotHours: Record<string, number> = {
+    breakfast: 8,
+    lunch: 12,
+    dinner: 18,
+    snack: 15,
+  };
+  const hour = slotHours[slot] ?? 12;
+  const d = typeof date === "string" ? new Date(date + "T12:00:00") : new Date(date);
+  d.setHours(hour, 0, 0, 0);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(hour).padStart(2, "0")}:00:00`;
+}
