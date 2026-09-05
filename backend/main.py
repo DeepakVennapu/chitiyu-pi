@@ -2,7 +2,9 @@
 import logging
 import threading
 import uvicorn
+from pathlib import Path
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from domains.tasks.router import router as tasks_router
 from domains.health.router import router as health_router
@@ -49,6 +51,12 @@ app.include_router(chat_router)
 @app.get("/health")
 def healthcheck():
     return {"status": "ok"}
+
+
+_web_dist = Path(__file__).parent.parent / "app" / "dist"
+if _web_dist.exists():
+    app.mount("/assets", StaticFiles(directory=_web_dist / "assets"), name="assets")
+    app.mount("/", StaticFiles(directory=_web_dist, html=True), name="web")
 
 
 if __name__ == "__main__":
